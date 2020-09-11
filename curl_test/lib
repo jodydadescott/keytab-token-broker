@@ -1,0 +1,75 @@
+function sanity_check() {
+  [[ $RHOST ]] || { err "Missing RHOST"; return 2; }
+  [[ $RUSER ]] || { err "Missing RUSER"; return 2; }
+  [[ $LHOST ]] || { err "Missing LHOST"; return 2; }
+  [[ $PRINCIPAL ]] || { err "Missing PRINCIPAL"; return 2; }
+  return 0
+}
+
+function run_getkeytab() {
+   sanity_check || return 2
+   local principal=$PRINCIPAL
+   [[ $1 ]] && {
+     principal=$1
+     err "Using principal $principal"
+   }
+   [[ $1 ]] || {
+     err "Using principal $principal (default)"
+   }
+
+  local t
+  local n
+  local r
+  err "Getting initial token"
+  t=$(run_gettoken "init") || return $?
+  err "TOKEN=$t"
+
+  err "Using token to get nonce"
+  n=$(run_getnonce "$t") || return $?
+  err "Nonce is $n"
+
+  err "Getting new token with audience set from nonce"
+  t=$(run_gettoken "$n") || return $?
+  err "TOKEN=$t"
+ 
+  err "Getting keytab with new token"
+  r=$(curl --fail -s ${LHOST}/getkeytab\?bearertoken="$t"\&principal="$principal")
+  [[ $r ]] || { err "Failed"; return 3; }
+  echo "$r"
+  return 0
+}
+
+function run_getnonce() {
+   sanity_check || return 2
+  [[ $1 ]] || { err "Usage: $0 token"; return 2; }
+  local r
+  r=$(curl --fail -s ${LHOST}/getnonce\?bearertoken="$1")
+  [[ $r ]] || {
+    err "Failed to get nonce"
+    return 3
+  }
+  local r2
+  err "Full Nonce:$r"
+  r2=$(echo "$r" | jq -r '.value')
+  [[ $r2 ]] || {
+    err "Nonce is corrupt?"
+    return 3
+  }
+  echo "$r2"
+  return 0
+}
+
+function run_gettoken() {
+   sanity_check || return 2
+  [[ $1 ]] || { err "Usage: $0 audience"; return 2; }
+  local r
+  r=$(ssh -q -t ${RUSER}@${RHOST} "./oneshot $1")
+  [[ $r ]] || {
+    err "Failed to get token"
+    return 3
+  }
+  echo "$r"
+  return 0
+}
+
+function err() { echo "$@" 1>&2; }
