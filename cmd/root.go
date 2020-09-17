@@ -66,7 +66,7 @@ var cmdClient = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Client")
 
-		tokenString := "eyJhbGciOiJFUzI1NiIsImtpZCI6IjVlM2RjNWNhYjE1NjhjMDAwMWU3YzJjMSIsInR5cCI6IkpXVCJ9.eyJzZXJ2aWNlIjp7IkBjbG91ZDphd3M6YW1pLWlkIjoiYW1pLTA5OGYxNmFmYTllZGY0MGJlIiwiaWxvdmUiOiJ0aGU4MHMiLCJrZXl0YWIiOiJzdXBlcm1hbkBFWEFNUExFLkNPTSJ9LCJhdWQiOiJiIiwiZXhwIjoxNjAwMzgwMDA1LCJpYXQiOjE2MDAzNzY0MDUsImlzcyI6Imh0dHBzOi8vYXBpLmNvbnNvbGUuYXBvcmV0by5jb20vdi8xL25hbWVzcGFjZXMvNWRkYzM5NmI5ZmFjZWMwMDAxZDNjODg2L29hdXRoaW5mbyIsInN1YiI6IjVmNjNjZTIxYTIwNTdmMDAwMTI1ZmI3MSJ9.HJvVSTjH_YQb7_dS78HpfYHgmTYsnwuFzCb2j71oWtBg9eIefL3OBPMVhJAtCcTesPc9Rymlz91Gj0qxWA0x7A"
+		tokenString := "not token"
 
 		token, err := model.TokenFromBase64(tokenString)
 		if err != nil {
