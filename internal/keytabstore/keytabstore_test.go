@@ -1,24 +1,35 @@
 package keytabstore
 
 import (
-	"fmt"
 	"testing"
 )
 
 func Test1(t *testing.T) {
 
-	store := NewKeytabStoreDefault()
+	var principals []string
+	principals = append(principals, "bob@example.com")
+	principals = append(principals, "alice@example.com")
+
+	config := &Config{
+		Principals: principals,
+	}
+
+	store, err := NewKeytabStore(config)
+	if err != nil {
+		t.Fatalf("Unexpected err %s", err)
+	}
 	defer store.Shutdown()
 
-	store.AddPrincipal("bob@example.com")
-	store.AddPrincipal("alice@example.com")
+	_, err = store.GetKeytab("bob@example.com")
 
-	keytab, err := store.GetKeytab("bob@example.com")
+	if err != nil {
+		t.Fatalf("Unexpected err %s", err)
+	}
+
+	_, err = store.GetKeytab("invalid@example.com")
 
 	if err == nil {
 		t.Fatalf("Expected err %s", err)
 	}
-
-	fmt.Println(keytab.JSON())
 
 }

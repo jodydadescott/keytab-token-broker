@@ -1,0 +1,5 @@
+#!/bin/bash
+cd "$(dirname "$0")" || exit 2
+source settings || exit 2
+source lib || exit 2
+"run_$(basename "$0")" $TOKEN

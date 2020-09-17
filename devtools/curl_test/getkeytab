@@ -1,0 +1,71 @@
+#!/bin/bash
+
+function main() {
+  cd "$(dirname "$0")" || return 2
+  source libcommon || return 2
+  source settings || return 2
+  sanity_check || return 2
+
+  local principal=$PRINCIPAL
+  [[ $1 ]] && {
+    principal=$1
+    err "Using principal $principal"
+  }
+  [[ $1 ]] || {
+    err "Using principal $principal (default)"
+  }
+
+  local t
+  local n
+  local r
+  err "Getting initial token"
+  t=$(gettoken "init") || return $?
+  err "TOKEN=$t"
+
+  err "Using token to get nonce"
+  n=$(getnonce "$t") || return $?
+  err "Nonce is $n"
+
+  err "Getting new token with audience set from nonce"
+  t=$(gettoken "$n") || return $?
+  err "TOKEN=$t"
+ 
+  err "Getting keytab with new token"
+  r=$(curl --fail -s ${LHOST}/getkeytab\?bearertoken="$t"\&principal="$principal")
+  [[ $r ]] || { err "Failed"; return 3; }
+  echo "$r"
+  return 0
+}
+
+function getnonce() {
+  [[ $1 ]] || { err "Usage: $0 token"; return 2; }
+  local r
+  r=$(curl --fail -s ${LHOST}/getnonce\?bearertoken="$1")
+  [[ $r ]] || {
+    err "Failed to get nonce"
+    return 3
+  }
+  local r2
+  err "Full Nonce:$r"
+  r2=$(echo "$r" | jq -r '.value')
+  [[ $r2 ]] || {
+    err "Nonce is corrupt?"
+    return 3
+  }
+  echo "$r2"
+  return 0
+}
+
+function gettoken() {
+  [[ $1 ]] || { err "Usage: $0 audience"; return 2; }
+  local r
+  r=$(ssh -q -t ${RUSER}@${RHOST} "./oneshot $1")
+  [[ $r ]] || {
+    err "Failed to get token"
+    return 3
+  }
+  echo "$r"
+  return 0
+}
+
+main "$@"

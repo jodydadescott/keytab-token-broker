@@ -1,312 +1,291 @@
 package keytabstore
 
 import (
-	"bufio"
-	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
+	"regexp"
 	"runtime"
 	"sync"
 	"time"
 
+	"github.com/jodydadescott/kerberos-bridge/internal/model"
 	"go.uber.org/zap"
 )
 
+var (
+	principalRegex = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+)
+
 const (
-	defaultKeytabLifetime int64 = 120
-	maxKeytabLifetime     int64 = 86400 // Seconds (One day)
-	minKeytabLifetime     int64 = 30    // Seconds
+	defaultLifetime      int64 = 300
+	maxLifetime          int64 = 86400
+	cacheCleanupInterval int   = 30
 )
 
 // Config ..
 type Config struct {
-	KeytabLifetime int64
+	Lifetime   int64    `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
+	Principals []string `json:"principals,omitempty" yaml:"principals,omitempty"`
+}
+
+// NewConfig ...
+func NewConfig() *Config {
+	return &Config{
+		Principals: []string{},
+	}
+}
+
+// NewExampleConfig ...
+func NewExampleConfig() *Config {
+	return &Config{
+		Lifetime:   defaultLifetime,
+		Principals: []string{"superman@EXAMPLE.COM", "birdman@EXAMPLE.COM"},
+	}
+}
+
+// KeytabStore holds valid keytabs, creates valid keytabs as necessary
+// and invalidates old keytabs when required. Keytabs hold encrypted passwords
+// and creating new keytabs invalidates old ones. When a keytab is requested
+// that already exist we must check to see if it is still valid. If so then
+// we hand out the exisitng keytab. If the keytab is expired we generate a
+// new one and replace the old one and return it. We need to handle the
+// situation where a keytab is expired but no one has requested a new one.
+// This is done by incremeting a counter when a keytab is requested.
+// Periodically this count is checked and if the keytab is no longer valid
+// and the checked out counter is greter then zero then a new keytab is
+// generated and the counter is set back to zero. This means that it is
+// possible for a keytab to be valid for a short time after it has expired
+// but before it is renewed.
+//
+// When a keytab is requested that is valid is is returned. It is possible
+// that a keytab that is close to expiration perhaps only by a second will
+// be returned. This is a difficult situation to deal with. If we isssue a
+// new keytab we are breaking the contract on the old one. If the expiration
+// is very close we could possibly block. At this time we are leaving it to
+// the client to handle this situation. Even if the keytab has technically
+// expired it should still work until the cleanup job runs or a request for
+// the same keytab is made again.
+//
+// Keytabs are held in a wrapper struct. At start time a wrapper is created
+// for each principal and added to a map. The map is written to my a single
+// writer and only once hence we do not need to lock the map. Wrappers do
+// need to be locked as we will read and write to them by multiple readers
+// and writers
+type KeytabStore struct {
+	internal map[string]*wrapper
+	lifetime int64
+	closed   chan struct{}
+	wg       sync.WaitGroup
+	ticker   *time.Ticker
+	mutex    sync.RWMutex
 }
 
 type wrapper struct {
 	principal string
-	keytab    *Keytab
+	keytab    *model.Keytab
+	mutex     sync.Mutex
 }
 
-// KeytabStore ..
-type KeytabStore struct {
-	mutex          sync.RWMutex
-	internal       map[string]*wrapper
-	keytabLifetime int64
-	closed         chan struct{}
-	wg             sync.WaitGroup
-	ticker         *time.Ticker
-}
+// NewKeytabStore Returns a new Kerberos Keytab Cache Store
+func NewKeytabStore(config *Config) (*KeytabStore, error) {
 
-// NewKeytabStore ...
-func NewKeytabStore(config *Config) *KeytabStore {
+	zap.L().Debug("Starting Keytab Store")
 
-	keytabLifetime := defaultKeytabLifetime
+	lifetime := defaultLifetime
 
-	if config.KeytabLifetime > 0 {
-		zap.L().Debug(fmt.Sprintf("KeytabLifetime is %d (config)", keytabLifetime))
-		keytabLifetime = config.KeytabLifetime
-	} else {
-		zap.L().Debug(fmt.Sprintf("KeytabLifetime is %d (default)", keytabLifetime))
+	if config.Lifetime > 0 {
+		lifetime = config.Lifetime
 	}
 
-	if keytabLifetime > maxKeytabLifetime {
-		panic(fmt.Sprintf("KeytabLifetime %d greater then max of %d", keytabLifetime, maxKeytabLifetime))
+	if lifetime > maxLifetime || lifetime < 0 {
+		return nil, fmt.Errorf("Lifetime %d is invalid. Must be greater then 0 and less then %d", lifetime, maxLifetime)
 	}
 
-	if keytabLifetime < minKeytabLifetime {
-		panic(fmt.Sprintf("KeytabLifetime %d smaller then min of %d", keytabLifetime, minKeytabLifetime))
+	if runtime.GOOS != "windows" {
+		zap.L().Warn(fmt.Sprintf("This OS is not supported. Real keytabs will NOT be generated"))
 	}
 
 	keytabStore := &KeytabStore{
-		internal:       make(map[string]*wrapper),
-		keytabLifetime: keytabLifetime,
-		closed:         make(chan struct{}),
-		ticker:         time.NewTicker(time.Duration(keytabLifetime-30) * time.Second),
+		internal: make(map[string]*wrapper),
+		lifetime: lifetime,
+		closed:   make(chan struct{}),
+		ticker:   time.NewTicker(time.Duration(cacheCleanupInterval) * time.Second),
+	}
+
+	err := keytabStore.loadPrincipals(config.Principals)
+	if err != nil {
+		return nil, err
 	}
 
 	go func() {
-		zap.L().Debug("Starting")
+
 		for {
 			select {
 			case <-keytabStore.closed:
 				zap.L().Debug("Shutting down")
 				return
 			case <-keytabStore.ticker.C:
-				zap.L().Debug("Updater->Automatic: running")
-				keytabStore.update()
-				zap.L().Debug("Updater->Automatic: completed")
+				zap.L().Debug("cleanupCache: running")
+				keytabStore.cleanupCache()
+				zap.L().Debug("cleanupCache: completed")
 			}
 		}
 	}()
 
-	return keytabStore
+	return keytabStore, nil
 }
 
-// NewKeytabStoreDefault ...
-func NewKeytabStoreDefault() *KeytabStore {
-	return NewKeytabStore(&Config{})
-}
+// Load only once and before we start
+func (t *KeytabStore) loadPrincipals(principals []string) error {
 
-// AddPrincipal ...
-func (t *KeytabStore) AddPrincipal(principal string) error {
-
-	if principal == "" {
-		panic("String 'principal' is empty")
-	}
-
-	if len(principal) < 3 && len(principal) > 254 {
-		if len(principal) < 3 {
-			return fmt.Errorf("Principal %s is to short", principal)
-		}
-		return fmt.Errorf("Principal %s is to long", principal)
-	}
-
-	if !principalRegex.MatchString(principal) {
-		err := fmt.Errorf("Principal is invalid")
-		zap.L().Error(fmt.Sprintf("AddPrincipal(%s)->[err=%s]", principal, err))
-		return err
-	}
-
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	t.internal[principal] = &wrapper{
-		principal: principal,
-		keytab:    &Keytab{},
-	}
-
-	zap.L().Debug(fmt.Sprintf("AddPrincipal(%s)->[ok]", principal))
-	return nil
-}
-
-// RemovePrincipal ...
-func (t *KeytabStore) RemovePrincipal(principal string) error {
-
-	if principal == "" {
-		panic("String 'principal' is empty")
-	}
-
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-
-	if _, exist := t.internal[principal]; exist {
-		delete(t.internal, principal)
-		zap.L().Error(fmt.Sprintf("RemovePrincipal(%s)->[err=nil]", principal))
+	if principals == nil {
+		zap.L().Warn("principals is nil")
 		return nil
 	}
 
-	err := fmt.Errorf("Principal not found")
-	zap.L().Error(fmt.Sprintf("RemovePrincipal(%s)->[err=%s]", principal, err))
-	return err
+	if len(principals) <= 0 {
+		zap.L().Warn("principals is empty")
+		return nil
+	}
+
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	for _, principal := range principals {
+
+		if principal == "" {
+			zap.L().Warn("Ignoring empty principal")
+			continue
+		}
+
+		if len(principal) < 3 && len(principal) > 254 {
+			if len(principal) < 3 {
+				return fmt.Errorf("Principal %s is to short", principal)
+			}
+			return fmt.Errorf("Principal %s is to long", principal)
+		}
+
+		if !principalRegex.MatchString(principal) {
+			return fmt.Errorf("Principal %s is invalid", principal)
+		}
+
+		keytab, err := t.newKeytab(principal)
+		if err != nil {
+			zap.L().Warn(fmt.Sprintf("Error on loading principal %s; error=%s", principal, err))
+			return nil
+		}
+
+		t.internal[principal] = &wrapper{
+			principal: principal,
+			keytab:    keytab,
+		}
+
+		zap.L().Debug(fmt.Sprintf("Loaded principal %s", principal))
+
+	}
+
+	return nil
 }
 
-// // GetPrincipal ...
-// func (t *KeytabStore) GetPrincipal(principal string) (*Principal, error) {
-
-// 	if principal == "" {
-// 		panic("String 'principal' is empty")
-// 	}
-
-// 	t.mutex.RLock()
-// 	defer t.mutex.RUnlock()
-
-// 	if principal, ok := t.internal[principal]; ok {
-// 		return principal, nil
-// 	}
-
-// 	err := fmt.Errorf("Principal not found")
-// 	zap.L().Error(fmt.Sprintf("GetPrincipal(%s)->[err=%s]", principal, err))
-// 	return nil, err
-// }
-
-// GetKeytab ...
-func (t *KeytabStore) GetKeytab(principal string) (*Keytab, error) {
+// GetKeytab returns keytab If wrapper does not exist then principal does not exist
+// If the wrapper does exist then we check if it has a valid
+// keytab and if it does we return it. If it does not then we
+// generate a new keytab and return it. We set the flag dirty
+// to true so that we know someone has the keytab
+func (t *KeytabStore) GetKeytab(principal string) (*model.Keytab, error) {
 
 	if principal == "" {
-		panic("String 'principal' is empty")
+		zap.L().Debug(fmt.Sprintf("Principal is empty"))
+		return nil, fmt.Errorf("Principal does not exist")
 	}
 
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
 
 	if wrapper, ok := t.internal[principal]; ok {
-		if wrapper.keytab.Valid() {
+
+		wrapper.mutex.Lock()
+		defer wrapper.mutex.Unlock()
+
+		var err error
+
+		if wrapper.keytab == nil {
+			wrapper.keytab, err = t.newKeytab(wrapper.principal)
+			if err != nil {
+				zap.L().Error(fmt.Sprintf("Error creating keytab for prinvipal %s; err=%s", wrapper.principal, err))
+				return nil, fmt.Errorf("Unable to create keytab; please talk to your system administrator")
+			}
 			return wrapper.keytab, nil
 		}
-		// Try to get updated
-		t.updateKeytab(wrapper)
-		if wrapper.keytab.Valid() {
+
+		if wrapper.keytab.Exp == 0 {
+			wrapper.keytab.Exp = time.Now().Unix() + t.lifetime
+			zap.L().Debug(fmt.Sprintf("Principal %s changed from clean to dirty; expiration is now set", wrapper.principal))
 			return wrapper.keytab, nil
 		}
-		return nil, fmt.Errorf("Please talk to you system administrator")
+
+		wrapper.keytab.Exp = time.Now().Unix() + t.lifetime
+		zap.L().Debug(fmt.Sprintf("Principal %s is dirty; expiration incremented", wrapper.principal))
+
+		return wrapper.keytab, nil
 	}
 
-	zap.L().Debug(fmt.Sprintf("Principal %s not found", principal))
 	return nil, fmt.Errorf("Principal not found")
 }
 
-// UpdateNow Update Keytab cache now
-func (t *KeytabStore) UpdateNow() {
-	zap.L().Debug("Updater->Manual: running")
-	t.update()
-	zap.L().Debug("Updater->Manual: completed")
-}
-
-func (t *KeytabStore) update() {
+func (t *KeytabStore) cleanupCache() {
 
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
 
 	for _, wrapper := range t.internal {
-		if wrapper.keytab.Valid() {
-			zap.L().Debug(fmt.Sprintf("Keytab for principal %s is valid", wrapper.principal))
-		} else {
-			zap.L().Debug(fmt.Sprintf("Keytab for principal %s is invalid; refreshing", wrapper.principal))
-			t.updateKeytab(wrapper)
+		wrapper.mutex.Lock()
+		defer wrapper.mutex.Unlock()
+
+		var err error
+
+		if wrapper.keytab == nil {
+			zap.L().Debug(fmt.Sprintf("Principal %s does not have a keytab; creating new", wrapper.principal))
+			wrapper.keytab, err = t.newKeytab(wrapper.principal)
+			if err != nil {
+				zap.L().Error(fmt.Sprintf("Unable to create Keytab for Principal %s, err:%s ", wrapper.principal, err))
+			}
+			continue
 		}
+
+		if wrapper.keytab.Exp == 0 {
+			zap.L().Debug(fmt.Sprintf("Principal %s is clean; nothing to do", wrapper.principal))
+			continue
+		}
+
+		if wrapper.keytab.Valid() {
+			zap.L().Debug(fmt.Sprintf("Principal %s is dirty but still valid; nothing to do", wrapper.principal))
+			continue
+		}
+
+		zap.L().Debug(fmt.Sprintf("Principal %s is dirty and invalid; creating new", wrapper.principal))
+
+		wrapper.keytab, err = t.newKeytab(wrapper.principal)
+		if err != nil {
+			zap.L().Error(fmt.Sprintf("Unable to create Keytab for Principal %s, err:%s ", wrapper.principal, err))
+		}
+
 	}
 
 }
 
-func (t *KeytabStore) updateKeytab(wrapper *wrapper) {
+func (t *KeytabStore) newKeytab(principal string) (*model.Keytab, error) {
 
-	if runtime.GOOS != "windows" {
-
-		zap.L().Debug(fmt.Sprintf("OS is %s not windows. Keytab for principal %s is not real", runtime.GOOS, wrapper.principal))
-
-		base64File := fmt.Sprintf("This is not a valid keytab file because the OS %s is not supported. Only Windows is supported at this time", runtime.GOOS)
-		wrapper.keytab = &Keytab{
-			Base64File: base64File,
-			Exp:        time.Now().Unix() + t.keytabLifetime,
-		}
-		return
-	}
-
-	// Use the Windows ktpass utility to generate a keytab. This must be
-	// executed on a Windows OS that is either a domain controller or a member
-	// of the desired domain. The password will be randomly created by the
-	// ktpass utility and unknown to us.
-	// ktpass
-	// Executable file locationL C:\Windows\System32\ktpass
-	// Documentation: https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc753771(v=ws.11)
-	// [/out <FileName>]
-	// [/princ <PrincipalName>]
-	// [/mapuser <UserAccount>]
-	// [/mapop {add|set}] [{-|+}desonly] [/in <FileName>]
-	// [/pass {Password|*|{-|+}rndpass}]
-	// [/minpass]
-	// [/maxpass]
-	// [/crypto {DES-CBC-CRC|DES-CBC-MD5|RC4-HMAC-NT|AES256-SHA1|AES128-SHA1|All}]
-	// [/itercount]
-	// [/ptype {KRB5_NT_PRINCIPAL|KRB5_NT_SRV_INST|KRB5_NT_SRV_HST}]
-	// [/kvno <KeyVersionNum>]
-	// [/answer {-|+}]
-	// [/target]
-	// [/rawsalt] [{-|+}dumpsalt] [{-|+}setupn] [{-|+}setpass <Password>]  [/?|/h|/help]
-	//
-	// Use +DumpSalt to dump MIT Salt to output
-
-	// Our syntax
-	// ktpass -out $file -mapUser $principal +rndPass -mapOp set -crypto AES256-SHA1 -ptype KRB5_NT_PRINCIPAL -princ HTTP/$principal
-
-	zap.L().Debug(fmt.Sprintf("Creating new keytab for principal %s", wrapper.principal))
-
-	tmpFile := tmpFile()
-
-	exe := "C:\\Windows\\System32\\ktpass"
-	args := []string{}
-	args = append(args, "-out")
-	args = append(args, tmpFile)
-	args = append(args, "-mapUser")
-	args = append(args, wrapper.principal)
-	args = append(args, "+rndPass")
-	args = append(args, "-mapOp")
-	args = append(args, "set")
-	args = append(args, "-crypto")
-	args = append(args, "AES256-SHA1")
-	args = append(args, "-ptype")
-	args = append(args, "KRB5_NT_PRINCIPAL")
-	args = append(args, "-princ")
-	args = append(args, "HTTP/"+wrapper.principal)
-
-	cmd := exec.Command(exe, args...)
-
-	zap.L().Debug(fmt.Sprintf("exec.Command(%s, %s)", exe, args))
-
-	err := cmd.Run()
+	base64File, err := osSpecificNewKeytab(principal)
 	if err != nil {
-		//TODO: Handle error better
-		zap.L().Error(fmt.Sprintf("Error getting keytab: cmd=%s %s, err=%s", exe, args, err))
-		wrapper.keytab = &Keytab{}
-		return
+		return nil, err
 	}
 
-	f, err := os.Open(tmpFile)
-	if err != nil {
-		zap.L().Error(fmt.Sprintf("Error getting keytab %s", err))
-		wrapper.keytab = &Keytab{}
-		return
-	}
-
-	defer f.Close()
-	defer os.Remove(f.Name())
-
-	reader := bufio.NewReader(f)
-	content, err := ioutil.ReadAll(reader)
-	if err != nil {
-		zap.L().Error(fmt.Sprintf("Error getting keytab %s", err))
-		wrapper.keytab = &Keytab{}
-		return
-	}
-
-	wrapper.keytab = &Keytab{
-		Base64File: base64.StdEncoding.EncodeToString(content),
-		Exp:        time.Now().Unix() + t.keytabLifetime,
-	}
-
-	zap.L().Debug(fmt.Sprintf("Keytab for principal %s loaded into cache", wrapper.principal))
+	return &model.Keytab{
+		Principal:  "HTTP/" + principal,
+		Base64File: base64File,
+	}, nil
 }
 
 // Shutdown Currently does nothing. Keeping as an option in case we want to

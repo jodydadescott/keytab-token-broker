@@ -1,0 +1,5 @@
+# Run test
+opa test . -v
+
+# Run eval
+opa eval -i input.json -d policy.rego "x = data.authz.allow"

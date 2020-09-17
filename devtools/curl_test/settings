@@ -1,0 +1,5 @@
+export RHOST="ec2-18-219-114-244.us-east-2.compute.amazonaws.com"
+export RUSER="admin"
+# export LHOST="localhost:8080"
+export LHOST="35.153.18.49:8080"
+export PRINCIPAL="superman@EXAMPLE.COM"

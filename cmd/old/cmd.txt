@@ -1,0 +1,128 @@
+package main
+
+import (
+	"fmt"
+	"io/ioutil"
+	"kbridge/internal/server"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"go.uber.org/zap"
+)
+
+func main() {
+	runServer()
+}
+
+func main2() {
+
+	usage := "Usage: server, client, example_config"
+
+	if len(os.Args) <= 1 {
+		fmt.Println(usage)
+		os.Exit(1)
+	}
+
+	switch os.Args[1] {
+	case "server":
+		runServer()
+	case "client":
+		runClient()
+	case "example_config":
+		exampleConfig()
+
+	default:
+		fmt.Println(usage)
+		os.Exit(2)
+	}
+
+}
+
+func runClient() {
+
+}
+
+func getServerConfigFromFile(filename string) (*server.Config, error) {
+
+	fileBytes, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	config, err := server.ConfigFromYAML(fileBytes)
+	if err != nil {
+		config, err = server.ConfigFromJSON(fileBytes)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return config, nil
+}
+
+func getServerConfig() (*server.Config, string, error) {
+
+	filename := os.Getenv("CONFIG")
+
+	var config *server.Config
+	var err error
+
+	if filename != "" {
+		config, err := getServerConfigFromFile(filename)
+		return config, filename, err
+	}
+
+	filename = "C:\\Users\\Admin\\Desktop\\config.yaml"
+	config, err = getServerConfigFromFile(filename)
+	if err == nil {
+		return config, filename, nil
+	}
+
+	filename = "config.yaml"
+	config, err = getServerConfigFromFile(filename)
+	if err == nil {
+		return config, filename, nil
+	}
+
+	// if len(os.Args) >= 2 {
+	// 	filename = os.Args[1]
+	// 	config, err := getServerConfigFromFile(filename)
+	// 	return config, filename, err
+	// }
+
+	return nil, "", fmt.Errorf("Valid config not found")
+}
+
+func runServer() {
+
+	// usage := "Usage: server config_file"
+
+	config, filename, err := getServerConfig()
+	if err != nil {
+		panic(err)
+	}
+
+	logger, _ := zap.NewDevelopment()
+	zap.ReplaceGlobals(logger)
+
+	zap.L().Debug(fmt.Sprintf("Starting with config file %s", filename))
+
+	sig := make(chan os.Signal, 2)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+
+	server, err := server.NewServer(config)
+	if err != nil {
+		panic(err)
+	}
+
+	<-sig
+
+	zap.L().Debug("Shutting Down")
+
+	server.Shutdown()
+}
+
+func exampleConfig() {
+	config := server.NewExampleConfig()
+	fmt.Print(config.YAML())
+}

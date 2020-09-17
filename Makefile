@@ -2,16 +2,16 @@ default:
 	$(MAKE) windows
 
 windows:
-	mkdir -p dist/windows
-	env GOOS=windows GOARCH=amd64 go build -o dist/windows/kbridge.exe main/main.go
+	mkdir -p dist
+	env GOOS=windows GOARCH=amd64 go build -o dist/kbridge-win-amd64.exe main.go
 
 linux:
-	mkdir -p dist/linux
-	env GOOS=linux GOARCH=amd64 go build -o dist/windows/kbridge main/main.go
+	mkdir -p dist
+	env GOOS=linux GOARCH=amd64 go build -o dist/kbridge-linux-amd64 main.go
 
 darwin:
-	mkdir -p dist/darwin
-	env GOOS=darwin GOARCH=amd64 go build -o dist/darwin/kbridge main/main.go
+	mkdir -p dist
+	env GOOS=darwin GOARCH=amd64 go build -o dist/kbridge-darwin-amd64 main.go
 
 all:
 	$(MAKE) windows
