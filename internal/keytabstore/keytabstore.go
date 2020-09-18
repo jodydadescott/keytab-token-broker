@@ -18,14 +18,14 @@ var (
 )
 
 const (
-	defaultLifetime      int64 = 300
-	maxLifetime          int64 = 86400
-	cacheCleanupInterval int   = 30
+	defaultLifetime      int = 300
+	maxLifetime              = 86400
+	cacheCleanupInterval     = 30
 )
 
 // Config ..
 type Config struct {
-	Lifetime   int64    `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
+	Lifetime   int      `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
 	Principals []string `json:"principals,omitempty" yaml:"principals,omitempty"`
 }
 
@@ -108,7 +108,7 @@ func NewKeytabStore(config *Config) (*KeytabStore, error) {
 
 	keytabStore := &KeytabStore{
 		internal: make(map[string]*wrapper),
-		lifetime: lifetime,
+		lifetime: int64(lifetime),
 		closed:   make(chan struct{}),
 		ticker:   time.NewTicker(time.Duration(cacheCleanupInterval) * time.Second),
 	}

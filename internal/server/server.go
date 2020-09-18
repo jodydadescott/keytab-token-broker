@@ -47,12 +47,13 @@ func NewConfig() *Config {
 // NewExampleConfig ...
 func NewExampleConfig() *Config {
 	return &Config{
-		HTTPPort:  8080,
-		HTTPSPort: 8443,
-		Nonce:     noncestore.NewExampleConfig(),
-		Policy:    policyengine.NewExampleConfig(),
-		Token:     tokenstore.NewExampleConfig(),
-		Keytab:    keytabstore.NewExampleConfig(),
+		ListenInterface: ":",
+		HTTPPort:        8080,
+		HTTPSPort:       8443,
+		Nonce:           noncestore.NewExampleConfig(),
+		Policy:          policyengine.NewExampleConfig(),
+		Token:           tokenstore.NewExampleConfig(),
+		Keytab:          keytabstore.NewExampleConfig(),
 	}
 }
 

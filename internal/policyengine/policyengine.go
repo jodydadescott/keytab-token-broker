@@ -34,7 +34,9 @@ type Config struct {
 
 // NewConfig ...
 func NewConfig() *Config {
-	return &Config{}
+	return &Config{
+		Policy: examplePolicy,
+	}
 }
 
 // NewExampleConfig ...
