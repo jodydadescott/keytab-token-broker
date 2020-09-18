@@ -1,9 +1,0 @@
-function sanity_check() {
-  [[ $RHOST ]] || { err "Missing RHOST"; return 2; }
-  [[ $RUSER ]] || { err "Missing RUSER"; return 2; }
-  [[ $LHOST ]] || { err "Missing LHOST"; return 2; }
-  [[ $PRINCIPAL ]] || { err "Missing PRINCIPAL"; return 2; }
-  return 0
-}
-
-function err() { echo "$@" 1>&2; }
