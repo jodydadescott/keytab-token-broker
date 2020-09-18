@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/jodydadescott/kerberos-bridge/internal/model"
 	"github.com/jodydadescott/kerberos-bridge/internal/server"
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
@@ -59,25 +58,6 @@ var cmdServer = &cobra.Command{
 	},
 }
 
-var cmdClient = &cobra.Command{
-	Use:   "client",
-	Short: "start client daemon",
-	//Args:  cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Client")
-
-		tokenString := "not token"
-
-		token, err := model.TokenFromBase64(tokenString)
-		if err != nil {
-			panic(err)
-		}
-
-		fmt.Println(token.Valid())
-
-	},
-}
-
 var cmdConfig = &cobra.Command{
 	Use:   "config",
 	Short: "generate example config",
@@ -101,7 +81,7 @@ func init() {
 	cmdServer.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kerberos-bridge.yaml)")
 	//cmdClient.PersistentFlags().Bool("viper", true, "use Viper for configuration")
 
-	rootCmd.AddCommand(cmdServer, cmdClient, cmdConfig)
+	rootCmd.AddCommand(cmdServer, cmdConfig)
 }
 
 func initConfig() {
