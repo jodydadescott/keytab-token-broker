@@ -30,6 +30,13 @@ type Config struct {
 	Lifetime int `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
 }
 
+// MergeConfig ...
+func (t *Config) MergeConfig(newConfig *Config) {
+	if newConfig.Lifetime > 0 {
+		t.Lifetime = newConfig.Lifetime
+	}
+}
+
 // NewConfig ...
 func NewConfig() *Config {
 	return &Config{}

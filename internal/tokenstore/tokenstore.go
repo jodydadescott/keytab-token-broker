@@ -32,6 +32,10 @@ var ErrNotFound error = errors.New("Not Found")
 type Config struct {
 }
 
+// MergeConfig ...
+func (t *Config) MergeConfig(newConfig *Config) {
+}
+
 // NewConfig ...
 func NewConfig() *Config {
 	return &Config{}
@@ -62,11 +66,6 @@ func (t *PublicKey) JSON() string {
 		panic(err.Error())
 	}
 	return string(e)
-}
-
-// AssertTypeValid ...
-func (t *PublicKey) AssertTypeValid() error {
-	return nil
 }
 
 // TokenStore ...

@@ -17,6 +17,7 @@ import (
 	"github.com/jodydadescott/kerberos-bridge/internal/policyengine"
 	"github.com/jodydadescott/kerberos-bridge/internal/tokenstore"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v2"
 )
 
@@ -25,13 +26,16 @@ var ErrExpired error = errors.New("Expired")
 
 // Config ...
 type Config struct {
-	Nonce           *noncestore.Config   `json:"nonce,omitempty" yaml:"nonce,omitempty"`
-	Policy          *policyengine.Config `json:"policy,omitempty" yaml:"policy,omitempty"`
-	Token           *tokenstore.Config   `json:"token,omitempty" yaml:"token,omitempty"`
-	Keytab          *keytabstore.Config  `json:"keytab,omitempty" yaml:"keytab,omitempty"`
-	HTTPPort        int                  `json:"httpPort,omitempty" yaml:"httpPort,omitempty"`
-	HTTPSPort       int                  `json:"httpsPort,omitempty" yaml:"httpsPort,omitempty"`
-	ListenInterface string               `json:"listenInterface,omitempty" yaml:"listenInterface,omitempty"`
+	LogLevel  string               `json:"logLevel,omitempty" yaml:"logLevel,omitempty"`
+	LogFormat string               `json:"logFormat,omitempty" yaml:"logFormat,omitempty"`
+	LogTo     []string             `json:"logTo,omitempty" yaml:"logTo,omitempty"`
+	Listen    string               `json:"Listen,omitempty" yaml:"Listen,omitempty"`
+	HTTPPort  int                  `json:"httpPort,omitempty" yaml:"httpPort,omitempty"`
+	HTTPSPort int                  `json:"httpsPort,omitempty" yaml:"httpsPort,omitempty"`
+	Nonce     *noncestore.Config   `json:"nonce,omitempty" yaml:"nonce,omitempty"`
+	Policy    *policyengine.Config `json:"policy,omitempty" yaml:"policy,omitempty"`
+	Token     *tokenstore.Config   `json:"token,omitempty" yaml:"token,omitempty"`
+	Keytab    *keytabstore.Config  `json:"keytab,omitempty" yaml:"keytab,omitempty"`
 }
 
 // NewConfig ...
@@ -47,14 +51,64 @@ func NewConfig() *Config {
 // NewExampleConfig ...
 func NewExampleConfig() *Config {
 	return &Config{
-		ListenInterface: ":",
-		HTTPPort:        8080,
-		HTTPSPort:       8443,
-		Nonce:           noncestore.NewExampleConfig(),
-		Policy:          policyengine.NewExampleConfig(),
-		Token:           tokenstore.NewExampleConfig(),
-		Keytab:          keytabstore.NewExampleConfig(),
+		LogLevel:  "info",
+		LogFormat: "json",
+		LogTo:     []string{"stderr"},
+		Listen:    "any",
+		HTTPPort:  8080,
+		HTTPSPort: 8443,
+		Nonce:     noncestore.NewExampleConfig(),
+		Policy:    policyengine.NewExampleConfig(),
+		Token:     tokenstore.NewExampleConfig(),
+		Keytab:    keytabstore.NewExampleConfig(),
 	}
+}
+
+// MergeConfig ...
+func (t *Config) MergeConfig(newConfig *Config) {
+
+	if newConfig.LogLevel != "" {
+		t.LogLevel = newConfig.LogLevel
+	}
+
+	if newConfig.LogFormat != "" {
+		t.LogFormat = newConfig.LogFormat
+	}
+
+	if newConfig.LogTo != nil {
+		if len(newConfig.LogTo) > 0 {
+			t.LogTo = newConfig.LogTo
+		}
+	}
+
+	if newConfig.Listen != "" {
+		t.Listen = newConfig.Listen
+	}
+
+	if newConfig.HTTPPort > 0 {
+		t.HTTPPort = newConfig.HTTPPort
+	}
+
+	if newConfig.HTTPSPort > 0 {
+		t.HTTPSPort = newConfig.HTTPSPort
+	}
+
+	if newConfig.Nonce != nil {
+		t.Nonce.MergeConfig(newConfig.Nonce)
+	}
+
+	if newConfig.Policy != nil {
+		t.Policy.MergeConfig(newConfig.Policy)
+	}
+
+	if newConfig.Token != nil {
+		t.Token.MergeConfig(newConfig.Token)
+	}
+
+	if newConfig.Keytab != nil {
+		t.Keytab.MergeConfig(newConfig.Keytab)
+	}
+
 }
 
 // JSON Returns JSON string representation of entity
@@ -109,6 +163,70 @@ type Server struct {
 // NewServer ...
 func NewServer(config *Config) (*Server, error) {
 
+	zapConfig := &zap.Config{
+		Development: false,
+		Sampling: &zap.SamplingConfig{
+			Initial:    100,
+			Thereafter: 100,
+		},
+		EncoderConfig: zap.NewProductionEncoderConfig(),
+	}
+
+	switch config.LogLevel {
+
+	case "debug":
+		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
+		break
+
+	case "info":
+		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
+		break
+
+	case "warn":
+		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.WarnLevel)
+		break
+
+	case "error":
+		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.ErrorLevel)
+		break
+
+	case "":
+		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
+
+	default:
+		return nil, fmt.Errorf("logging level must be debug, info (default), warn or error")
+	}
+
+	switch config.LogFormat {
+
+	case "json":
+		zapConfig.Encoding = "json"
+		break
+
+	case "console":
+		zapConfig.Encoding = "console"
+		break
+
+	case "":
+		zapConfig.Encoding = "json"
+		break
+
+	default:
+		return nil, fmt.Errorf("logging format must be json (default) or console")
+
+	}
+
+	if config.LogTo == nil || len(config.LogTo) <= 0 {
+		zapConfig.OutputPaths = append(zapConfig.OutputPaths, "stderr")
+		zapConfig.ErrorOutputPaths = append(zapConfig.ErrorOutputPaths, "stderr")
+	}
+
+	logger, err := zapConfig.Build()
+	if err != nil {
+		return nil, err
+	}
+	zap.ReplaceGlobals(logger)
+
 	if config.HTTPPort < 0 {
 		return nil, fmt.Errorf("HTTPPort must be 0 or greater")
 	}
@@ -151,11 +269,14 @@ func NewServer(config *Config) (*Server, error) {
 
 	go func() {
 
-		zap.L().Debug("Starting")
+		zap.L().Debug(fmt.Sprintf("Starting with config %s", config.JSON()))
 
 		if config.HTTPPort > 0 {
 			go func() {
-				listener := config.ListenInterface + ":" + strconv.Itoa(config.HTTPPort)
+				listener := ":" + strconv.Itoa(config.HTTPPort)
+				if config.Listen != "" && config.Listen != "any" {
+					listener = config.Listen + ":" + strconv.Itoa(config.HTTPPort)
+				}
 				zap.L().Debug("Starting HTTP")
 				server.httpServer = &http.Server{Addr: listener, Handler: server}
 				server.httpServer.ListenAndServe()

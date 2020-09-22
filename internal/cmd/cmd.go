@@ -1,17 +1,23 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
-	"os/signal"
+	"runtime"
 	"strings"
-	"syscall"
+	"time"
 
 	"github.com/jodydadescott/kerberos-bridge/internal/server"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+)
+
+const (
+	maxIdleConnections int = 2
+	requestTimeout     int = 60
 )
 
 var rootCmd = &cobra.Command{
@@ -21,136 +27,265 @@ var rootCmd = &cobra.Command{
 	by validating token is permitted keytab by policy. Policy is
 	in the form of Open Policy Agent (OPA). Keytabs may be used
 	to generate kerberos tickets and then discarded.`,
+}
 
-	Run: func(cmd *cobra.Command, args []string) {
+var _httpClient *http.Client
 
-		// fmt.Println("log level:", viper.GetString("log_level"))
-		// fmt.Println("log format:", viper.GetString("log_format"))
-		// fmt.Println("log to:", viper.GetString("log_to"))
-
-		zapConfig := &zap.Config{
-			Development: false,
-			Sampling: &zap.SamplingConfig{
-				Initial:    100,
-				Thereafter: 100,
+func getHTTPClient() *http.Client {
+	if _httpClient == nil {
+		_httpClient = &http.Client{
+			Transport: &http.Transport{
+				MaxIdleConnsPerHost: maxIdleConnections,
 			},
-			EncoderConfig: zap.NewProductionEncoderConfig(),
+			Timeout: time.Duration(requestTimeout) * time.Second,
 		}
+	}
+	return _httpClient
+}
 
-		switch viper.GetString("log_level") {
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "manage configuration",
+}
 
-		case "debug":
-			zapConfig.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
+var createConfigCmd = &cobra.Command{
+	Use:   "create",
+	Short: "create example configuration",
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+
+		config := server.NewExampleConfig()
+
+		out := ""
+		switch strings.ToLower(viper.GetString("format")) {
+
+		case "yaml":
+			out = config.YAML()
 			break
-
-		case "info":
-			zapConfig.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
-			break
-
-		case "warn":
-			zapConfig.Level = zap.NewAtomicLevelAt(zapcore.WarnLevel)
-			break
-
-		case "error":
-			zapConfig.Level = zap.NewAtomicLevelAt(zapcore.ErrorLevel)
-			break
-
-		default:
-			fmt.Println("logging level must be debug, info, warn or error")
-			os.Exit(2)
-		}
-
-		switch viper.GetString("log_format") {
 
 		case "json":
-			zapConfig.Encoding = "json"
+			out = config.JSON()
 			break
 
-		case "console":
-			zapConfig.Encoding = "console"
+		case "":
+			out = config.YAML()
 			break
 
 		default:
-			fmt.Println("logging format must be json or console")
-			os.Exit(2)
+			return fmt.Errorf(fmt.Sprintf("Output format %s is unknown. Must be yaml or json", viper.GetString("format")))
+		}
+
+		switch strings.ToLower(viper.GetString("out")) {
+
+		case "", "stdout":
+			fmt.Print(out)
+			return nil
+
+		case "stderr":
+			fmt.Fprint(os.Stderr, out)
+			return nil
 
 		}
 
-		for _, s := range strings.Split(viper.GetString("log_to"), ",") {
-			zapConfig.OutputPaths = append(zapConfig.OutputPaths, s)
-			zapConfig.ErrorOutputPaths = append(zapConfig.ErrorOutputPaths, s)
-		}
-
-		config := server.NewConfig()
-		config.HTTPPort = viper.GetInt("httpport")
-		config.HTTPSPort = viper.GetInt("httpsport")
-		config.ListenInterface = viper.GetString("listen")
-		config.Nonce.Lifetime = viper.GetInt("nonce_lifetime")
-		config.Policy.Query = viper.GetString("policy_query")
-
-		// Policy may be the policy or a file
-		// policy := viper.GetString("policy_rego")
-
-		// if policy == "" {
-		// 	fmt.Println("Policy must specify a rego policy directly or reference a file that holds policy")
-		// 	os.Exit(2)
-		// }
-
-		// if isFile(policy) {
-		// 	zap.L().Debug(fmt.Sprintf("Policy is a file"))
-		// 	f, err := os.Open(policy)
-		// 	if err != nil {
-		// 		panic(err)
-		// 	}
-		// 	defer f.Close()
-
-		// 	reader := bufio.NewReader(f)
-		// 	content, err := ioutil.ReadAll(reader)
-		// 	if err != nil {
-		// 		panic(err)
-		// 	}
-		// 	config.Policy.Policy = string(content)
-
-		// } else {
-		// 	config.Policy.Policy = policy
-		// }
-
-		config.Keytab.Lifetime = viper.GetInt("keytab_lifetime")
-
-		for _, s := range strings.Split(viper.GetString("keytab_principals"), ",") {
-			config.Keytab.Principals = append(config.Keytab.Principals, s)
-		}
-
-		logger, err := zapConfig.Build()
-		if err != nil {
-			panic(err)
-		}
-		zap.ReplaceGlobals(logger)
-
-		zap.L().Debug(fmt.Sprintf("Running with config %s", config.JSON()))
-
-		sig := make(chan os.Signal, 2)
-		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-
-		server, err := server.NewServer(config)
-		if err != nil {
-			panic(err)
-		}
-
-		<-sig
-
-		zap.L().Debug("Shutting Down")
-
-		server.Shutdown()
-
+		return ioutil.WriteFile(viper.GetString("out"), []byte(out), 0644)
 	},
 }
 
-func isFile(s string) bool {
-	if _, err := os.Stat(s); err != nil {
-		return false
+var exportConfigCmd = &cobra.Command{
+	Use:   "export",
+	Short: "export config from Windows registry to file",
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+
+		config, err := getConfigFromRegistry()
+		if err != nil {
+			return err
+		}
+
+		out := ""
+		switch strings.ToLower(viper.GetString("format")) {
+
+		case "yaml":
+			out = config.YAML()
+			break
+
+		case "json":
+			out = config.JSON()
+			break
+
+		case "":
+			out = config.YAML()
+			break
+
+		default:
+			return fmt.Errorf(fmt.Sprintf("Output format %s is unknown. Must be yaml or json", viper.GetString("format")))
+		}
+
+		switch strings.ToLower(viper.GetString("out")) {
+
+		case "", "stdout":
+			fmt.Print(out)
+			return nil
+
+		case "stderr":
+			fmt.Fprint(os.Stderr, out)
+			return nil
+
+		}
+
+		return ioutil.WriteFile(viper.GetString("out"), []byte(out), 0644)
+	},
+}
+
+var importConfigCmd = &cobra.Command{
+	Use:   "import",
+	Short: "import config from file or url into Windows registry",
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+
+		in := viper.GetString("in")
+		if in == "" {
+			return fmt.Errorf("Missing --in (filename or url)")
+		}
+
+		if strings.HasPrefix(in, "https://") || strings.HasPrefix(in, "http://") {
+			config, err := getConfigFromURI(in)
+			if err != nil {
+				return err
+			}
+			err = setRegistryConfig(config)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+
+		config, err := getConfigFromFile(in)
+		if err != nil {
+			return err
+		}
+
+		err = setRegistryConfig(config)
+		if err != nil {
+			return err
+		}
+		return nil
+	},
+}
+
+func getRuntimeConfig() (*server.Config, error) {
+
+	var err error
+	var config *server.Config
+
+	in := viper.GetString("run-config")
+
+	if in != "" {
+		fmt.Fprint(os.Stderr, fmt.Sprintf("Runtime config is %s from arg", in))
+
+		if strings.HasPrefix(in, "https://") || strings.HasPrefix(in, "http://") {
+			config, err := getConfigFromURI(in)
+			if err != nil {
+				return nil, err
+			}
+			return config, nil
+		}
+
+		config, err = getConfigFromFile(in)
+		if err != nil {
+			return nil, err
+		}
+		return config, err
 	}
-	return true
+
+	if runtime.GOOS == "windows" {
+
+		in, err = getRuntimeConfigString()
+		if err != nil {
+			return nil, err
+		}
+
+		if in == "registry" || in == "" {
+			fmt.Fprint(os.Stderr, fmt.Sprintf("Runtime config is %s from Windows registry", in))
+			config, err = getConfigFromRegistry()
+			if err != nil {
+				return nil, err
+			}
+			return config, nil
+		}
+
+		if strings.HasPrefix(in, "https://") || strings.HasPrefix(in, "http://") {
+			fmt.Fprint(os.Stderr, fmt.Sprintf("Runtime config is remote %s", in))
+			config, err := getConfigFromURI(in)
+			if err != nil {
+				return nil, err
+			}
+			return config, nil
+		}
+
+		config, err := getConfigFromFile(in)
+		if err != nil {
+			return nil, err
+		}
+		return config, err
+	}
+
+	return nil, fmt.Errorf("")
+
+	return nil, fmt.Errorf("")
+}
+
+var serverCmd = &cobra.Command{
+	Use:   "server",
+	Short: "run server",
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+
+		// getRuntimeConfig
+
+		// config := server.NewConfig()
+
+		// if runtime.GOOS == "windows" {
+		// 	if viper.GetBool("registry") {
+		// 		fmt.Fprintln(os.Stderr, "Getting and merging config from Windows registry")
+		// 		newConfig, err := registryGetConfig()
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		// 		config.MergeConfig(newConfig)
+		// 	}
+		// }
+
+		// if x := viper.GetString("config"); x != "" {
+		// 	fmt.Fprintln(os.Stderr, fmt.Sprintf("Getting and merging config from file %s", x))
+		// 	newConfig, err := getConfigFromFile(x)
+		// 	if err != nil {
+		// 		return err
+		// 	}
+		// 	config.MergeConfig(newConfig)
+		// }
+
+		// fmt.Fprintln(os.Stderr, fmt.Sprintf("Getting and merging config from args"))
+		// config.MergeConfig(getConfigFromArgs())
+
+		// fmt.Println(fmt.Sprintf("Config:%s", config.JSON()))
+
+		// sig := make(chan os.Signal, 2)
+		// signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+
+		// server, err := server.NewServer(config)
+		// if err != nil {
+		// 	fmt.Println(fmt.Sprintf("Unable to start server; err=%s", err))
+		// 	os.Exit(3)
+		// }
+
+		// <-sig
+
+		// server.Shutdown()
+
+		return nil
+
+	},
 }
 
 // Execute ...
@@ -162,31 +297,100 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().IntP("nonce-lifetime", "", 0, "nonce lifetime")
-	rootCmd.PersistentFlags().StringP("policy-query", "", "", "Policy query")
-	rootCmd.PersistentFlags().StringP("policy-rego", "", "", "Policy rego (raw script or filename to script")
-	rootCmd.PersistentFlags().IntP("keytab-lifetime", "", 0, "keytab lifetime")
-	rootCmd.PersistentFlags().StringP("keytab-principals", "", "", "keytab principals (comma delimited)")
-	rootCmd.PersistentFlags().IntP("httpport", "", 0, "http port (if enabled)")
-	rootCmd.PersistentFlags().IntP("httpsport", "", 0, "https port (if enabled)")
-	rootCmd.PersistentFlags().StringP("listen", "", "", "interface to listen on (http/https)")
-	rootCmd.PersistentFlags().StringP("log-level", "", "info", "log level (debug, info=default, warn, error)")
-	rootCmd.PersistentFlags().StringP("log-format", "", "json", "log format (json, text)")
-	rootCmd.PersistentFlags().StringP("log-to", "", "stderr", "log to stderr or file")
 
-	viper.BindPFlag("nonce_lifetime", rootCmd.PersistentFlags().Lookup("nonce-lifetime"))
-	viper.BindPFlag("policy_query", rootCmd.PersistentFlags().Lookup("policy-query"))
-	viper.BindPFlag("policy_rego", rootCmd.PersistentFlags().Lookup("policy-rego"))
-	viper.BindPFlag("keytab_lifetime", rootCmd.PersistentFlags().Lookup("keytab-lifetime"))
-	viper.BindPFlag("keytab_principals", rootCmd.PersistentFlags().Lookup("keytab-principals"))
-	viper.BindPFlag("httpport", rootCmd.PersistentFlags().Lookup("httpport"))
-	viper.BindPFlag("httpsport", rootCmd.PersistentFlags().Lookup("httpsport"))
-	viper.BindPFlag("listen", rootCmd.PersistentFlags().Lookup("listen"))
-	viper.BindPFlag("log_level", rootCmd.PersistentFlags().Lookup("log-level"))
-	viper.BindPFlag("log_format", rootCmd.PersistentFlags().Lookup("log-format"))
-	viper.BindPFlag("log_to", rootCmd.PersistentFlags().Lookup("log-to"))
+	configCmd.AddCommand(createConfigCmd)
+	// import/export are only for windows registry
+	if runtime.GOOS == "windows" {
+		configCmd.AddCommand(importConfigCmd, exportConfigCmd)
+	}
 
-	viper.SetEnvPrefix("kbridge")
-	viper.AutomaticEnv()
+	// Config Command
 
+	configCmd.PersistentFlags().StringP("format", "", "", "output format in yaml or json; default is yaml")
+	viper.BindPFlag("format", configCmd.PersistentFlags().Lookup("format"))
+
+	configCmd.PersistentFlags().StringP("in", "", "", "input (file or url)")
+	viper.BindPFlag("in", configCmd.PersistentFlags().Lookup("in"))
+
+	configCmd.PersistentFlags().StringP("out", "", "", "output file")
+	viper.BindPFlag("out", configCmd.PersistentFlags().Lookup("out"))
+
+	// ServerCmd
+
+	serverCmd.PersistentFlags().StringP("run-config", "", "", "file or url for runtime config. overrides default")
+	viper.BindPFlag("run-config", serverCmd.PersistentFlags().Lookup("run-config"))
+
+	rootCmd.AddCommand(configCmd, serverCmd)
+}
+
+func getConfigFromFile(filename string) (*server.Config, error) {
+
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	defer f.Close()
+
+	reader := bufio.NewReader(f)
+	content, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	return getConfigFromBytes(content)
+}
+
+func getConfigFromString(input string) (*server.Config, error) {
+	return getConfigFromBytes([]byte(input))
+}
+
+func getConfigFromBytes(input []byte) (*server.Config, error) {
+
+	var yamlErr error
+	var err error
+	var config *server.Config
+
+	// File could be YAML or JSON. Try both. Return yaml error if neither work
+	config, yamlErr = server.ConfigFromYAML(input)
+	if yamlErr == nil {
+		return config, nil
+	}
+
+	config, err = server.ConfigFromJSON(input)
+	if err == nil {
+		return config, nil
+	}
+
+	return nil, yamlErr
+}
+
+func getConfigFromURI(uri string) (*server.Config, error) {
+
+	req, err := http.NewRequest("GET", uri, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := getHTTPClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	config, err := getConfigFromBytes(b)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf(fmt.Sprintf("%s returned status code %d", uri, resp.StatusCode))
+	}
+
+	return config, nil
 }

@@ -12,7 +12,7 @@ import (
 
 var exampleQuery = "grant_new_nonce = data.kbridge.grant_new_nonce; data.kbridge.get_principals[get_principals]"
 
-var examplePolicy string = `
+var exampleRegoScript string = `
 package kbridge
 	
 default grant_new_nonce = false
@@ -28,22 +28,30 @@ get_principals[grant] {
 
 // Config The Config
 type Config struct {
-	Query  string `json:"query,omitempty" yaml:"query,omitempty"`
-	Policy string `json:"policy,omitempty" yaml:"policy,omitempty"`
+	Query      string `json:"query,omitempty" yaml:"query,omitempty"`
+	RegoScript string `json:"policy,omitempty" yaml:"policy,omitempty"`
+}
+
+// MergeConfig ...
+func (t *Config) MergeConfig(newConfig *Config) {
+	if newConfig.Query != "" {
+		t.Query = newConfig.Query
+	}
+	if newConfig.RegoScript != "" {
+		t.RegoScript = newConfig.RegoScript
+	}
 }
 
 // NewConfig ...
 func NewConfig() *Config {
-	return &Config{
-		Policy: examplePolicy,
-	}
+	return &Config{}
 }
 
 // NewExampleConfig ...
 func NewExampleConfig() *Config {
 	return &Config{
-		Query:  exampleQuery,
-		Policy: examplePolicy,
+		Query:      exampleQuery,
+		RegoScript: exampleRegoScript,
 	}
 }
 
@@ -60,15 +68,15 @@ func NewPolicyEngine(config *Config) (*PolicyEngine, error) {
 		return nil, fmt.Errorf("Query is empty")
 	}
 
-	if config.Policy == "" {
-		return nil, fmt.Errorf("Policy is empty")
+	if config.RegoScript == "" {
+		return nil, fmt.Errorf("RegoScript is empty")
 	}
 
 	ctx := context.Background()
 
 	query, err := rego.New(
 		rego.Query(config.Query),
-		rego.Module("kerberos.rego", config.Policy),
+		rego.Module("kerberos.rego", config.RegoScript),
 	).PrepareForEval(ctx)
 
 	if err != nil {

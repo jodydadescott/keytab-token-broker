@@ -29,6 +29,18 @@ type Config struct {
 	Principals []string `json:"principals,omitempty" yaml:"principals,omitempty"`
 }
 
+// MergeConfig ...
+func (t *Config) MergeConfig(newConfig *Config) {
+	if newConfig.Lifetime > 0 {
+		t.Lifetime = newConfig.Lifetime
+	}
+	if newConfig.Principals != nil {
+		for _, p := range newConfig.Principals {
+			t.Principals = append(t.Principals, p)
+		}
+	}
+}
+
 // NewConfig ...
 func NewConfig() *Config {
 	return &Config{

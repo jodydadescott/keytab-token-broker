@@ -37,8 +37,8 @@ func Test1(t *testing.T) {
 	}
 
 	config := &Config{
-		Query:  exampleQuery,
-		Policy: examplePolicy,
+		Query:      exampleQuery,
+		RegoScript: exampleRegoScript,
 	}
 
 	ctx := context.Background()

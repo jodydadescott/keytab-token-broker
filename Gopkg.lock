@@ -102,14 +102,6 @@
   version = "v1.8.3"
 
 [[projects]]
-  digest = "1:6dbb0eb72090871f2e58d1e37973fe3cb8c0f45f49459398d3fc740cb30e13bd"
-  name = "github.com/mitchellh/go-homedir"
-  packages = ["."]
-  pruneopts = ""
-  revision = "af06845cf3004701891bf4fdb884bfe4920b3727"
-  version = "v1.1.0"
-
-[[projects]]
   digest = "1:8871abddc1a4e30c0356055f65a3909a73b8847ca1e97e286a9ff7f5df8b92a2"
   name = "github.com/mitchellh/mapstructure"
   packages = ["."]
@@ -316,6 +308,8 @@
   packages = [
     "internal/unsafeheader",
     "unix",
+    "windows",
+    "windows/registry",
   ]
   pruneopts = ""
   revision = "efd3b9a0ff205c921c51961c1c9bb8728bd0ce1b"
@@ -412,11 +406,12 @@
   input-imports = [
     "github.com/dgrijalva/jwt-go",
     "github.com/jinzhu/copier",
-    "github.com/mitchellh/go-homedir",
     "github.com/open-policy-agent/opa/rego",
     "github.com/spf13/cobra",
     "github.com/spf13/viper",
     "go.uber.org/zap",
+    "go.uber.org/zap/zapcore",
+    "golang.org/x/sys/windows/registry",
     "gopkg.in/yaml.v2",
   ]
   solver-name = "gps-cdcl"

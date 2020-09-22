@@ -1,8 +1,49 @@
 @ECHO OFF
 
-SET KBRIDGE_NONCE_LIFETIME=60
+;; Default is stderr
+;; SET KBRIDGE_LOG_TO="stderr"
+SET KBRIDGE_LOG_TO="C:\Users\Admin\Desktop\kbridg\log.txt"
+
+;; Default is info
+;; SET KBRIDGE_LOG_LEVEL="info"
+;; SET KBRIDGE_LOG_LEVEL="debug"
+;; SET KBRIDGE_LOG_LEVEL="warn"
+;; SET KBRIDGE_LOG_LEVEL="error"
+SET KBRIDGE_LOG_LEVEL="debug"
+
+;; Default is json
+;; SET KBRIDGE_LOG_FORMAT="json"
+;; SET KBRIDGE_LOG_FORMAT="console"
+SET KBRIDGE_LOG_FORMAT="console"
+
+;; Default is 60
+;; SET KBRIDGE_NONCE_LIFETIME=60
+
+;; Default is 120
+;; SET KBRIDGE_KEYTAB_LIFETIME=120
+
+;; Default is "" (all interfaces)
+;; SET KBRIDGE_LISTEN=""
+
+;; Default is 0 (disabled)
+;; SET KBRIDGE_HTTPPORT=0
+SET KBRIDGE_HTTPPORT=8080
+
+;; Default is 0 (disabled)
+;; SET KBRIDGE_HTTPSPORT=0
+
+;; KBRIDGE_KEYTAB_PRINCIPALS has no default. It is not technically required
+;; but there should be one or more
+;; SET KBRIDGE_KEYTAB_PRINCIPALS=""
+SET KBRIDGE_KEYTAB_PRINCIPALS="superman@EXAMPLE.COM"
+
+;; KBRIDGE_POLICY_QUERY and KBRIDGE_POLICY_REGO have no default and are 
+;; are required. KBRIDGE_POLICY_QUERY must be a valid OPA Rego query statement.
+;; KBRIDGE_POLICY_REGO must be a valid rego policy or a filename that contains
+;; a valid policy
+
 SET KBRIDGE_POLICY_QUERY="grant_new_nonce = data.kbridge.grant_new_nonce; data.kbridge.get_principals[get_principals]"
-SET KBRIDGE_POLICY_REGO=$(cat <<'EOF'
+SET KBRIDGE_POLICY_REGO='
 package kbridge
 	
 default grant_new_nonce = false
@@ -14,25 +55,6 @@ grant_new_nonce {
 get_principals[grant] {
 	grant := split(input.claims.service.keytab,",")
 }
-EOF
-)
+'
 
-SET KBRIDGE_KEYTAB_LIFETIME=300
-SET KBRIDGE_KEYTAB_PRINCIPALS="superman@EXAMPLE.COM"
-SET KBRIDGE_HTTPPORT=8080
-# SET KBRIDGE_LISTEN=""
-# SET KBRIDGE_HTTPSPORT=8443
-
-# SET KBRIDGE_LOG_LEVEL="info"
-SET KBRIDGE_LOG_LEVEL="debug"
-# SET KBRIDGE_LOG_LEVEL="warn"
-# SET KBRIDGE_LOG_LEVEL="error"
-
-SET KBRIDGE_LOG_FORMAT="json"
-# SET KBRIDGE_LOG_FORMAT="console"
-
-SET KBRIDGE_LOG_TO="stderr"
-
-SET KBRIDGE_LOG_TO="stderr"
-
-start "" C:\Users\Admin\Desktop\kbridge-win-amd64
+start "" C:\Users\Admin\Desktop\kbridge\kbridge-win-amd64 server
