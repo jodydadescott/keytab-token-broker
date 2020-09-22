@@ -15,25 +15,31 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/jodydadescott/kerberos-bridge/internal/cachemap"
-	"github.com/jodydadescott/kerberos-bridge/internal/model"
 	"go.uber.org/zap"
 )
 
 const (
-	cacheCheckInterval int = 30
-	maxIdleConnections int = 4
-	requestTimeout     int = 60
+	defaultCacheRefreshInterval int = 30
+	minCacheRefreshInterval         = 15
+	maxCacheRefreshInterval         = 3600
+
+	defaultPublicKeyidleConnections = 4
+	minPublicKeyidleConnections     = 1
+	maxPublicKeyidleConnections     = 10
+
+	defaultPublicKeyRequestTimeout = 60
+	minPublicKeyRequestTimeout     = 5
+	maxPublicKeyRequestTimeout     = 600
 )
 
 // ErrNotFound ...
 var ErrNotFound error = errors.New("Not Found")
 
-// Config ...
+// Config The config
 type Config struct {
-}
-
-// MergeConfig ...
-func (t *Config) MergeConfig(newConfig *Config) {
+	CacheRefreshInterval     int `json:"cacheRefreshInterval,omitempty" yaml:"cacheRefreshInterval,omitempty"`
+	PublicKeyRequestTimeout  int `json:"publicKeyRequestTimeout,omitempty" yaml:"publicKeyRequestTimeout,omitempty"`
+	PublicKeyidleConnections int `json:"publicKeyidleConnections,omitempty" yaml:"publicKeyidleConnections,omitempty"`
 }
 
 // NewConfig ...
@@ -77,20 +83,48 @@ type TokenStore struct {
 // NewTokenStore Returns a new Token Store
 func NewTokenStore(config *Config) (*TokenStore, error) {
 
+	cacheRefreshInterval := defaultCacheRefreshInterval
+	publicKeyRequestTimeout := defaultPublicKeyRequestTimeout
+	publicKeyidleConnections := defaultPublicKeyidleConnections
+
+	if config.CacheRefreshInterval > 0 {
+		cacheRefreshInterval = config.CacheRefreshInterval
+	}
+
+	if config.PublicKeyRequestTimeout > 0 {
+		publicKeyRequestTimeout = config.PublicKeyRequestTimeout
+	}
+
+	if config.PublicKeyidleConnections > 0 {
+		publicKeyidleConnections = config.PublicKeyidleConnections
+	}
+
+	if cacheRefreshInterval < minCacheRefreshInterval || cacheRefreshInterval > maxCacheRefreshInterval {
+		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "CacheRefreshInterval", minCacheRefreshInterval, maxCacheRefreshInterval))
+	}
+
+	if publicKeyRequestTimeout < minPublicKeyRequestTimeout || publicKeyRequestTimeout > maxPublicKeyRequestTimeout {
+		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "PublicKeyRequestTimeout", minPublicKeyRequestTimeout, maxPublicKeyRequestTimeout))
+	}
+
+	if publicKeyidleConnections < minPublicKeyidleConnections || publicKeyidleConnections > maxPublicKeyidleConnections {
+		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "PublicKeyidleConnections", minPublicKeyidleConnections, maxPublicKeyidleConnections))
+	}
+
 	return &TokenStore{
-		cacheMap: cachemap.NewCacheMap("token", cacheCheckInterval),
+		cacheMap: cachemap.NewCacheMap("token", cacheRefreshInterval),
 		httpClient: &http.Client{
 			Transport: &http.Transport{
-				MaxIdleConnsPerHost: maxIdleConnections,
+				MaxIdleConnsPerHost: publicKeyidleConnections,
 			},
-			Timeout: time.Duration(requestTimeout) * time.Second,
+			Timeout: time.Duration(publicKeyRequestTimeout) * time.Second,
 		},
 	}, nil
 
 }
 
 // GetToken ...
-func (t *TokenStore) GetToken(token string) (*model.Token, error) {
+func (t *TokenStore) GetToken(token string) (*Token, error) {
 
 	if token == "" {
 		return nil, fmt.Errorf("Token is empty")
@@ -99,13 +133,13 @@ func (t *TokenStore) GetToken(token string) (*model.Token, error) {
 	shortTokenString := token[1:8] + "..."
 
 	if e, exist := t.cacheMap.Get(token); exist {
-		xtoken := e.(*model.Token)
+		xtoken := e.(*Token)
 		return xtoken, nil
 	}
 
 	zap.L().Debug(fmt.Sprintf("Token=%s not found in cache", shortTokenString))
 
-	xtoken := &model.Token{}
+	xtoken := &Token{}
 
 	_, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
 

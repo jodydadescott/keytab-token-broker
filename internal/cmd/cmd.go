@@ -2,17 +2,23 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jodydadescott/kerberos-bridge/internal/server"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
+	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -48,282 +54,193 @@ var configCmd = &cobra.Command{
 	Short: "manage configuration",
 }
 
-var createConfigCmd = &cobra.Command{
-	Use:   "create",
+var configSetCmd = &cobra.Command{
+	Use:   "set",
+	Short: "set runtime configuration",
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+
+		if len(args) < 1 {
+			return errors.New("config string required")
+		}
+
+		runtimeConfigString := args[0]
+		// Need to verify string
+
+		err := setRuntimeConfigString(runtimeConfigString)
+		if err != nil {
+			return err
+		}
+		return nil
+	},
+}
+
+var configGetCmd = &cobra.Command{
+	Use:   "get",
+	Short: "get runtime configuration",
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+		config, err := getRuntimeConfigString()
+		if err != nil {
+			return err
+		}
+		fmt.Println(config)
+		return nil
+	},
+}
+
+var configExampleCmd = &cobra.Command{
+	Use:   "example",
 	Short: "create example configuration",
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		config := server.NewExampleConfig()
+		outputFileOrDev := "stdout"
 
-		out := ""
+		if len(args) > 0 {
+			outputFileOrDev = args[0]
+		}
+
+		config := NewExampleConfig()
+
+		configString := ""
 		switch strings.ToLower(viper.GetString("format")) {
 
 		case "yaml":
-			out = config.YAML()
+			configString = config.YAML()
 			break
 
 		case "json":
-			out = config.JSON()
+			configString = config.JSON()
 			break
 
 		case "":
-			out = config.YAML()
+			configString = config.YAML()
 			break
 
 		default:
 			return fmt.Errorf(fmt.Sprintf("Output format %s is unknown. Must be yaml or json", viper.GetString("format")))
 		}
 
-		switch strings.ToLower(viper.GetString("out")) {
-
-		case "", "stdout":
-			fmt.Print(out)
+		if outputFileOrDev == "stdout" {
+			fmt.Print(configString)
 			return nil
-
-		case "stderr":
-			fmt.Fprint(os.Stderr, out)
-			return nil
-
 		}
 
-		return ioutil.WriteFile(viper.GetString("out"), []byte(out), 0644)
+		return ioutil.WriteFile(outputFileOrDev, []byte(configString), 0644)
 	},
 }
 
-var exportConfigCmd = &cobra.Command{
-	Use:   "export",
-	Short: "export config from Windows registry to file",
+func getRuntimeConfig() (*Config, error) {
 
-	RunE: func(cmd *cobra.Command, args []string) error {
+	runtimeConfigString := viper.GetString("config")
+	runtimeConfigStringSource := "arg"
 
-		config, err := getConfigFromRegistry()
-		if err != nil {
-			return err
-		}
-
-		out := ""
-		switch strings.ToLower(viper.GetString("format")) {
-
-		case "yaml":
-			out = config.YAML()
-			break
-
-		case "json":
-			out = config.JSON()
-			break
-
-		case "":
-			out = config.YAML()
-			break
-
-		default:
-			return fmt.Errorf(fmt.Sprintf("Output format %s is unknown. Must be yaml or json", viper.GetString("format")))
-		}
-
-		switch strings.ToLower(viper.GetString("out")) {
-
-		case "", "stdout":
-			fmt.Print(out)
-			return nil
-
-		case "stderr":
-			fmt.Fprint(os.Stderr, out)
-			return nil
-
-		}
-
-		return ioutil.WriteFile(viper.GetString("out"), []byte(out), 0644)
-	},
-}
-
-var importConfigCmd = &cobra.Command{
-	Use:   "import",
-	Short: "import config from file or url into Windows registry",
-
-	RunE: func(cmd *cobra.Command, args []string) error {
-
-		in := viper.GetString("in")
-		if in == "" {
-			return fmt.Errorf("Missing --in (filename or url)")
-		}
-
-		if strings.HasPrefix(in, "https://") || strings.HasPrefix(in, "http://") {
-			config, err := getConfigFromURI(in)
-			if err != nil {
-				return err
-			}
-			err = setRegistryConfig(config)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-
-		config, err := getConfigFromFile(in)
-		if err != nil {
-			return err
-		}
-
-		err = setRegistryConfig(config)
-		if err != nil {
-			return err
-		}
-		return nil
-	},
-}
-
-func getRuntimeConfig() (*server.Config, error) {
-
-	var err error
-	var config *server.Config
-
-	in := viper.GetString("run-config")
-
-	if in != "" {
-		fmt.Fprint(os.Stderr, fmt.Sprintf("Runtime config is %s from arg", in))
-
-		if strings.HasPrefix(in, "https://") || strings.HasPrefix(in, "http://") {
-			config, err := getConfigFromURI(in)
-			if err != nil {
-				return nil, err
-			}
-			return config, nil
-		}
-
-		config, err = getConfigFromFile(in)
+	if runtimeConfigString == "" {
+		tmp, err := getRuntimeConfigString()
 		if err != nil {
 			return nil, err
 		}
-		return config, err
+		runtimeConfigString = tmp
+		runtimeConfigStringSource = "system"
 	}
 
-	if runtime.GOOS == "windows" {
-
-		in, err = getRuntimeConfigString()
-		if err != nil {
-			return nil, err
-		}
-
-		if in == "registry" || in == "" {
-			fmt.Fprint(os.Stderr, fmt.Sprintf("Runtime config is %s from Windows registry", in))
-			config, err = getConfigFromRegistry()
-			if err != nil {
-				return nil, err
-			}
-			return config, nil
-		}
-
-		if strings.HasPrefix(in, "https://") || strings.HasPrefix(in, "http://") {
-			fmt.Fprint(os.Stderr, fmt.Sprintf("Runtime config is remote %s", in))
-			config, err := getConfigFromURI(in)
-			if err != nil {
-				return nil, err
-			}
-			return config, nil
-		}
-
-		config, err := getConfigFromFile(in)
-		if err != nil {
-			return nil, err
-		}
-		return config, err
+	if runtimeConfigString == "" {
+		return nil, errors.New("runtime config string not found")
 	}
 
-	return nil, fmt.Errorf("")
+	fmt.Fprintln(os.Stderr, fmt.Sprintf("Using runtime config string %s from %s", runtimeConfigString, runtimeConfigStringSource))
 
-	return nil, fmt.Errorf("")
+	if strings.HasPrefix(runtimeConfigString, "https://") || strings.HasPrefix(runtimeConfigString, "http://") {
+		config, err := getConfigFromURI(runtimeConfigString)
+		if err != nil {
+			return nil, err
+		}
+		return config, nil
+	}
+
+	config, err := getConfigFromFile(runtimeConfigString)
+	if err != nil {
+		return nil, err
+	}
+	return config, err
 }
 
 var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "run server",
+	Use:   "start",
+	Short: "start server",
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		// getRuntimeConfig
+		config, err := getRuntimeConfig()
+		if err != nil {
+			return err
+		}
 
-		// config := server.NewConfig()
+		if config.ServerConfig == nil {
+			return errors.New("ServerConfig is missing from config")
+		}
 
-		// if runtime.GOOS == "windows" {
-		// 	if viper.GetBool("registry") {
-		// 		fmt.Fprintln(os.Stderr, "Getting and merging config from Windows registry")
-		// 		newConfig, err := registryGetConfig()
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		// 		config.MergeConfig(newConfig)
-		// 	}
-		// }
+		zapConfig, err := config.ZapConfig()
+		if err != nil {
+			return err
+		}
 
-		// if x := viper.GetString("config"); x != "" {
-		// 	fmt.Fprintln(os.Stderr, fmt.Sprintf("Getting and merging config from file %s", x))
-		// 	newConfig, err := getConfigFromFile(x)
-		// 	if err != nil {
-		// 		return err
-		// 	}
-		// 	config.MergeConfig(newConfig)
-		// }
+		logger, err := zapConfig.Build()
+		if err != nil {
+			return err
+		}
 
-		// fmt.Fprintln(os.Stderr, fmt.Sprintf("Getting and merging config from args"))
-		// config.MergeConfig(getConfigFromArgs())
+		if runtime.GOOS == "windows" {
+			hook, err := getZapHook()
+			if err != nil {
+				return err
+			}
+			logger = logger.WithOptions(zap.Hooks(hook))
+		}
 
-		// fmt.Println(fmt.Sprintf("Config:%s", config.JSON()))
+		zap.ReplaceGlobals(logger)
+		//defer logger.Sync()
 
-		// sig := make(chan os.Signal, 2)
-		// signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+		//fmt.Println(fmt.Sprintf("Config:%s", config.JSON()))
 
-		// server, err := server.NewServer(config)
-		// if err != nil {
-		// 	fmt.Println(fmt.Sprintf("Unable to start server; err=%s", err))
-		// 	os.Exit(3)
-		// }
+		sig := make(chan os.Signal, 2)
+		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
-		// <-sig
+		server, err := server.NewServer(config.ServerConfig)
+		if err != nil {
+			return err
+		}
 
-		// server.Shutdown()
+		<-sig
+
+		server.Shutdown()
 
 		return nil
-
 	},
 }
 
 // Execute ...
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
 func init() {
 
-	configCmd.AddCommand(createConfigCmd)
-	// import/export are only for windows registry
-	if runtime.GOOS == "windows" {
-		configCmd.AddCommand(importConfigCmd, exportConfigCmd)
-	}
-
-	// Config Command
-
-	configCmd.PersistentFlags().StringP("format", "", "", "output format in yaml or json; default is yaml")
-	viper.BindPFlag("format", configCmd.PersistentFlags().Lookup("format"))
-
-	configCmd.PersistentFlags().StringP("in", "", "", "input (file or url)")
-	viper.BindPFlag("in", configCmd.PersistentFlags().Lookup("in"))
-
-	configCmd.PersistentFlags().StringP("out", "", "", "output file")
-	viper.BindPFlag("out", configCmd.PersistentFlags().Lookup("out"))
-
-	// ServerCmd
-
-	serverCmd.PersistentFlags().StringP("run-config", "", "", "file or url for runtime config. overrides default")
-	viper.BindPFlag("run-config", serverCmd.PersistentFlags().Lookup("run-config"))
-
+	configCmd.AddCommand(configSetCmd, configGetCmd, configExampleCmd)
 	rootCmd.AddCommand(configCmd, serverCmd)
+
+	configExampleCmd.PersistentFlags().StringP("format", "", "", "output format in yaml or json; default is yaml")
+	viper.BindPFlag("format", configExampleCmd.PersistentFlags().Lookup("format"))
+
+	serverCmd.PersistentFlags().StringP("config", "", "", "configuration file")
+	viper.BindPFlag("config", serverCmd.PersistentFlags().Lookup("config"))
 }
 
-func getConfigFromFile(filename string) (*server.Config, error) {
+func getConfigFromFile(filename string) (*Config, error) {
 
 	f, err := os.Open(filename)
 	if err != nil {
@@ -340,31 +257,25 @@ func getConfigFromFile(filename string) (*server.Config, error) {
 	return getConfigFromBytes(content)
 }
 
-func getConfigFromString(input string) (*server.Config, error) {
-	return getConfigFromBytes([]byte(input))
-}
+func getConfigFromBytes(input []byte) (*Config, error) {
 
-func getConfigFromBytes(input []byte) (*server.Config, error) {
-
-	var yamlErr error
-	var err error
-	var config *server.Config
-
-	// File could be YAML or JSON. Try both. Return yaml error if neither work
-	config, yamlErr = server.ConfigFromYAML(input)
-	if yamlErr == nil {
+	var config *Config
+	err0 := yaml.Unmarshal(input, &config)
+	if err0 == nil {
 		return config, nil
 	}
 
-	config, err = server.ConfigFromJSON(input)
+	err := json.Unmarshal(input, &config)
 	if err == nil {
 		return config, nil
 	}
 
-	return nil, yamlErr
+	return nil, err0
 }
 
-func getConfigFromURI(uri string) (*server.Config, error) {
+func getConfigFromURI(uri string) (*Config, error) {
+
+	fmt.Fprintln(os.Stderr, fmt.Sprintf("Getting config from %s", uri))
 
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {

@@ -7,19 +7,19 @@ import (
 	"time"
 
 	"github.com/jodydadescott/kerberos-bridge/internal/cachemap"
-	"github.com/jodydadescott/kerberos-bridge/internal/model"
 )
 
 const (
 	charset = "abcdefghijklmnopqrstuvwxyz" +
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-	defaultLifetime int = 60
-	maxLifetime         = 86400 // 1 Day
-	minLifetime         = 30
+	defaultCacheRefreshInterval int = 30
+	minCacheRefreshInterval         = 15
+	maxCacheRefreshInterval         = 3600
 
-	// Interval between cache cleanup
-	cacheCleanup = 60
+	defaultLifetime int = 60
+	minLifetime         = 30
+	maxLifetime         = 86400 // 1 Day
 )
 
 // ErrNotFound Not Found
@@ -27,14 +27,8 @@ var ErrNotFound error = errors.New("Not Found")
 
 // Config Config
 type Config struct {
-	Lifetime int `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
-}
-
-// MergeConfig ...
-func (t *Config) MergeConfig(newConfig *Config) {
-	if newConfig.Lifetime > 0 {
-		t.Lifetime = newConfig.Lifetime
-	}
+	CacheRefreshInterval int `json:"cacheRefreshInterval,omitempty" yaml:"cacheRefreshInterval,omitempty"`
+	Lifetime             int `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
 }
 
 // NewConfig ...
@@ -59,18 +53,27 @@ type NonceStore struct {
 // NewNonceStore Returns a new NonceStore
 func NewNonceStore(config *Config) (*NonceStore, error) {
 
+	cacheRefreshInterval := defaultCacheRefreshInterval
 	lifetime := defaultLifetime
+
+	if config.CacheRefreshInterval > 0 {
+		cacheRefreshInterval = config.CacheRefreshInterval
+	}
 
 	if config.Lifetime > 0 {
 		lifetime = config.Lifetime
 	}
 
+	if cacheRefreshInterval < minCacheRefreshInterval || cacheRefreshInterval > maxCacheRefreshInterval {
+		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "CacheRefreshInterval", minCacheRefreshInterval, maxCacheRefreshInterval))
+	}
+
 	if lifetime > maxLifetime || lifetime < minLifetime {
-		return nil, fmt.Errorf("Lifetime %d is invalid. Must be greater then %d and less then %d", lifetime, maxLifetime, minLifetime)
+		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "Lifetime", minLifetime, maxLifetime))
 	}
 
 	nonceStore := &NonceStore{
-		cacheMap: cachemap.NewCacheMap("nonce", cacheCleanup),
+		cacheMap: cachemap.NewCacheMap("nonce", cacheRefreshInterval),
 		seededRand: rand.New(
 			rand.NewSource(time.Now().Unix())),
 		lifetime: int64(lifetime),
@@ -85,14 +88,14 @@ func (t *NonceStore) Shutdown() {
 }
 
 // NewNonce Returns a new nonce
-func (t *NonceStore) NewNonce() *model.Nonce {
+func (t *NonceStore) NewNonce() *Nonce {
 
 	b := make([]byte, 64)
 	for i := range b {
 		b[i] = charset[t.seededRand.Intn(len(charset))]
 	}
 
-	nonce := &model.Nonce{
+	nonce := &Nonce{
 		Exp:   time.Now().Unix() + t.lifetime,
 		Value: string(b),
 	}
@@ -103,14 +106,14 @@ func (t *NonceStore) NewNonce() *model.Nonce {
 
 // GetNonce Gets nonce by value and returns it. If the nonce is not found then
 // nil and an error are returned
-func (t *NonceStore) GetNonce(value string) (*model.Nonce, error) {
+func (t *NonceStore) GetNonce(value string) (*Nonce, error) {
 
 	if value == "" {
 		panic("String 'value' is required")
 	}
 
 	if e, exist := t.cacheMap.Get(value); exist {
-		nonce := e.(*model.Nonce)
+		nonce := e.(*Nonce)
 		return nonce, nil
 	}
 

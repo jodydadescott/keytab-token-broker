@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/jodydadescott/kerberos-bridge/internal/model"
 	"github.com/open-policy-agent/opa/rego"
 	"go.uber.org/zap"
 )
@@ -30,16 +29,6 @@ get_principals[grant] {
 type Config struct {
 	Query      string `json:"query,omitempty" yaml:"query,omitempty"`
 	RegoScript string `json:"policy,omitempty" yaml:"policy,omitempty"`
-}
-
-// MergeConfig ...
-func (t *Config) MergeConfig(newConfig *Config) {
-	if newConfig.Query != "" {
-		t.Query = newConfig.Query
-	}
-	if newConfig.RegoScript != "" {
-		t.RegoScript = newConfig.RegoScript
-	}
 }
 
 // NewConfig ...
@@ -90,7 +79,7 @@ func NewPolicyEngine(config *Config) (*PolicyEngine, error) {
 }
 
 // RenderDecision ...
-func (t *PolicyEngine) RenderDecision(ctx context.Context, input interface{}) (*model.PolicyDecision, error) {
+func (t *PolicyEngine) RenderDecision(ctx context.Context, input interface{}) (*PolicyDecision, error) {
 
 	results, err := t.query.Eval(ctx, rego.EvalInput(input))
 
@@ -129,7 +118,7 @@ func (t *PolicyEngine) RenderDecision(ctx context.Context, input interface{}) (*
 	//xtype := reflect.TypeOf(results[0].Bindings["principals"])
 	// fmt.Println(xtype)
 
-	return &model.PolicyDecision{
+	return &PolicyDecision{
 		GetNonce:   getNonce,
 		Principals: principals,
 	}, nil

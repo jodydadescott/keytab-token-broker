@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jodydadescott/kerberos-bridge/internal/model"
 	"go.uber.org/zap"
 )
 
@@ -18,27 +17,20 @@ var (
 )
 
 const (
-	defaultLifetime      int = 300
-	maxLifetime              = 86400
-	cacheCleanupInterval     = 30
+	defaultCacheRefreshInterval int = 30
+	minCacheRefreshInterval         = 15
+	maxCacheRefreshInterval         = 3600
+
+	defaultLifetime = 300
+	minLifetime     = 30
+	maxLifetime     = 86400
 )
 
 // Config ..
 type Config struct {
-	Lifetime   int      `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
-	Principals []string `json:"principals,omitempty" yaml:"principals,omitempty"`
-}
-
-// MergeConfig ...
-func (t *Config) MergeConfig(newConfig *Config) {
-	if newConfig.Lifetime > 0 {
-		t.Lifetime = newConfig.Lifetime
-	}
-	if newConfig.Principals != nil {
-		for _, p := range newConfig.Principals {
-			t.Principals = append(t.Principals, p)
-		}
-	}
+	CacheRefreshInterval int      `json:"cacheRefreshInterval,omitempty" yaml:"cacheRefreshInterval,omitempty"`
+	Lifetime             int      `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
+	Principals           []string `json:"principals,omitempty" yaml:"principals,omitempty"`
 }
 
 // NewConfig ...
@@ -95,7 +87,7 @@ type KeytabStore struct {
 
 type wrapper struct {
 	principal string
-	keytab    *model.Keytab
+	keytab    *Keytab
 	mutex     sync.Mutex
 }
 
@@ -104,14 +96,23 @@ func NewKeytabStore(config *Config) (*KeytabStore, error) {
 
 	zap.L().Debug("Starting Keytab Store")
 
+	cacheRefreshInterval := defaultCacheRefreshInterval
 	lifetime := defaultLifetime
+
+	if config.CacheRefreshInterval > 0 {
+		cacheRefreshInterval = config.CacheRefreshInterval
+	}
 
 	if config.Lifetime > 0 {
 		lifetime = config.Lifetime
 	}
 
-	if lifetime > maxLifetime || lifetime < 0 {
-		return nil, fmt.Errorf("Lifetime %d is invalid. Must be greater then 0 and less then %d", lifetime, maxLifetime)
+	if cacheRefreshInterval < minCacheRefreshInterval || cacheRefreshInterval > maxCacheRefreshInterval {
+		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "CacheRefreshInterval", minCacheRefreshInterval, maxCacheRefreshInterval))
+	}
+
+	if lifetime > maxLifetime || lifetime < minLifetime {
+		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "Lifetime", minLifetime, maxLifetime))
 	}
 
 	if runtime.GOOS != "windows" {
@@ -122,7 +123,7 @@ func NewKeytabStore(config *Config) (*KeytabStore, error) {
 		internal: make(map[string]*wrapper),
 		lifetime: int64(lifetime),
 		closed:   make(chan struct{}),
-		ticker:   time.NewTicker(time.Duration(cacheCleanupInterval) * time.Second),
+		ticker:   time.NewTicker(time.Duration(cacheRefreshInterval) * time.Second),
 	}
 
 	err := keytabStore.loadPrincipals(config.Principals)
@@ -205,7 +206,7 @@ func (t *KeytabStore) loadPrincipals(principals []string) error {
 // keytab and if it does we return it. If it does not then we
 // generate a new keytab and return it. We set the flag dirty
 // to true so that we know someone has the keytab
-func (t *KeytabStore) GetKeytab(principal string) (*model.Keytab, error) {
+func (t *KeytabStore) GetKeytab(principal string) (*Keytab, error) {
 
 	if principal == "" {
 		zap.L().Debug(fmt.Sprintf("Principal is empty"))
@@ -287,14 +288,14 @@ func (t *KeytabStore) cleanupCache() {
 
 }
 
-func (t *KeytabStore) newKeytab(principal string) (*model.Keytab, error) {
+func (t *KeytabStore) newKeytab(principal string) (*Keytab, error) {
 
 	base64File, err := osSpecificNewKeytab(principal)
 	if err != nil {
 		return nil, err
 	}
 
-	return &model.Keytab{
+	return &Keytab{
 		Principal:  "HTTP/" + principal,
 		Base64File: base64File,
 	}, nil
