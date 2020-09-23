@@ -1,120 +1,109 @@
 package cmd
 
-import (
-	"encoding/json"
-	"fmt"
+// import (
+// 	"encoding/json"
+// 	"fmt"
 
-	"github.com/jodydadescott/kerberos-bridge/internal/server"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"gopkg.in/yaml.v2"
-)
+// 	"github.com/jodydadescott/kerberos-bridge/internal/server"
+// 	"go.uber.org/zap"
+// 	"go.uber.org/zap/zapcore"
+// 	"gopkg.in/yaml.v2"
+// )
 
-// Config Application Configuration
-type Config struct {
-	LogLevel         string         `json:"logLevel,omitempty" yaml:"logLevel,omitempty"`
-	LogFormat        string         `json:"logFormat,omitempty" yaml:"logFormat,omitempty"`
-	OutputPaths      []string       `json:"outputPaths,omitempty" yaml:"outputPaths,omitempty"`
-	ErrorOutputPaths []string       `json:"errorOutputPaths,omitempty" yaml:"errorOutputPaths,omitempty"`
-	ServerConfig     *server.Config `json:"serverConfig,omitempty" yaml:"serverConfig,omitempty"`
-}
+// // Config Application Configuration
+// type Config struct {
+// 	LogLevel         string         `json:"logLevel,omitempty" yaml:"logLevel,omitempty"`
+// 	LogFormat        string         `json:"logFormat,omitempty" yaml:"logFormat,omitempty"`
+// 	OutputPaths      []string       `json:"outputPaths,omitempty" yaml:"outputPaths,omitempty"`
+// 	ErrorOutputPaths []string       `json:"errorOutputPaths,omitempty" yaml:"errorOutputPaths,omitempty"`
+// 	ServerConfig     *server.Config `json:"serverConfig,omitempty" yaml:"serverConfig,omitempty"`
+// }
 
-// NewExampleConfig Return example configuration
-func NewExampleConfig() *Config {
-	return &Config{
-		LogLevel:         "info",
-		LogFormat:        "json",
-		OutputPaths:      []string{"stderr"},
-		ErrorOutputPaths: []string{"stderr"},
-		ServerConfig:     server.NewExampleConfig(),
-	}
-}
+// // ZapConfig Return new instance of ZapConfig
+// func (t *Config) ZapConfig() (*zap.Config, error) {
 
-// ZapConfig Return new instance of ZapConfig
-func (t *Config) ZapConfig() (*zap.Config, error) {
+// 	zapConfig := &zap.Config{
+// 		Development: false,
+// 		Sampling: &zap.SamplingConfig{
+// 			Initial:    100,
+// 			Thereafter: 100,
+// 		},
+// 		EncoderConfig: zap.NewProductionEncoderConfig(),
+// 	}
 
-	zapConfig := &zap.Config{
-		Development: false,
-		Sampling: &zap.SamplingConfig{
-			Initial:    100,
-			Thereafter: 100,
-		},
-		EncoderConfig: zap.NewProductionEncoderConfig(),
-	}
+// 	switch t.LogLevel {
 
-	switch t.LogLevel {
+// 	case "debug":
+// 		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
+// 		break
 
-	case "debug":
-		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
-		break
+// 	case "info":
+// 		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
+// 		break
 
-	case "info":
-		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
-		break
+// 	case "warn":
+// 		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.WarnLevel)
+// 		break
 
-	case "warn":
-		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.WarnLevel)
-		break
+// 	case "error":
+// 		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.ErrorLevel)
+// 		break
 
-	case "error":
-		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.ErrorLevel)
-		break
+// 	case "":
+// 		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
 
-	case "":
-		zapConfig.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
+// 	default:
+// 		return nil, fmt.Errorf("logging level must be debug, info (default), warn or error")
+// 	}
 
-	default:
-		return nil, fmt.Errorf("logging level must be debug, info (default), warn or error")
-	}
+// 	switch t.LogFormat {
 
-	switch t.LogFormat {
+// 	case "json":
+// 		zapConfig.Encoding = "json"
+// 		break
 
-	case "json":
-		zapConfig.Encoding = "json"
-		break
+// 	case "console":
+// 		zapConfig.Encoding = "console"
+// 		break
 
-	case "console":
-		zapConfig.Encoding = "console"
-		break
+// 	case "":
+// 		zapConfig.Encoding = "json"
+// 		break
 
-	case "":
-		zapConfig.Encoding = "json"
-		break
+// 	default:
+// 		return nil, fmt.Errorf("logging format must be json (default) or console")
 
-	default:
-		return nil, fmt.Errorf("logging format must be json (default) or console")
+// 	}
 
-	}
+// 	if t.OutputPaths == nil || len(t.OutputPaths) <= 0 {
+// 		zapConfig.OutputPaths = append(zapConfig.OutputPaths, "stderr")
+// 	} else {
+// 		zapConfig.OutputPaths = t.OutputPaths
+// 	}
 
-	if t.OutputPaths == nil || len(t.OutputPaths) <= 0 {
-		zapConfig.OutputPaths = append(zapConfig.OutputPaths, "stderr")
-	} else {
-		zapConfig.OutputPaths = t.OutputPaths
-	}
+// 	if t.ErrorOutputPaths == nil || len(t.ErrorOutputPaths) <= 0 {
+// 		zapConfig.ErrorOutputPaths = append(zapConfig.ErrorOutputPaths, "stderr")
+// 	} else {
+// 		zapConfig.ErrorOutputPaths = t.ErrorOutputPaths
+// 	}
 
-	if t.ErrorOutputPaths == nil || len(t.ErrorOutputPaths) <= 0 {
-		zapConfig.ErrorOutputPaths = append(zapConfig.ErrorOutputPaths, "stderr")
-	} else {
-		zapConfig.ErrorOutputPaths = t.ErrorOutputPaths
-	}
+// 	return zapConfig, nil
+// }
 
-	return zapConfig, nil
-}
+// // JSON return JSON string representation of entity
+// func (t *Config) JSON() string {
+// 	e, err := json.Marshal(t)
+// 	if err != nil {
+// 		panic(err.Error())
+// 	}
+// 	return string(e)
+// }
 
-// JSON return JSON string representation of entity
-func (t *Config) JSON() string {
-	e, err := json.Marshal(t)
-	if err != nil {
-		panic(err.Error())
-	}
-	return string(e)
-}
-
-// YAML return JSON string representation of entity
-func (t *Config) YAML() string {
-	e, err := yaml.Marshal(t)
-	if err != nil {
-		panic(err.Error())
-	}
-	return string(e)
-}
+// // YAML return JSON string representation of entity
+// func (t *Config) YAML() string {
+// 	e, err := yaml.Marshal(t)
+// 	if err != nil {
+// 		panic(err.Error())
+// 	}
+// 	return string(e)
+// }

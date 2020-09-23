@@ -7,106 +7,53 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/jinzhu/copier"
-	"github.com/jodydadescott/kerberos-bridge/internal/keytabstore"
-	"github.com/jodydadescott/kerberos-bridge/internal/noncestore"
-	"github.com/jodydadescott/kerberos-bridge/internal/policyengine"
-	"github.com/jodydadescott/kerberos-bridge/internal/tokenstore"
+	"github.com/jodydadescott/kerberos-bridge/internal/keytabs"
+	"github.com/jodydadescott/kerberos-bridge/internal/nonces"
+	"github.com/jodydadescott/kerberos-bridge/internal/tokens"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v2"
 )
 
 // ErrExpired ...
 var ErrExpired error = errors.New("Expired")
 
-// Config ...
-type Config struct {
-	Listen    string               `json:"Listen,omitempty" yaml:"Listen,omitempty"`
-	HTTPPort  int                  `json:"httpPort,omitempty" yaml:"httpPort,omitempty"`
-	HTTPSPort int                  `json:"httpsPort,omitempty" yaml:"httpsPort,omitempty"`
-	Nonce     *noncestore.Config   `json:"nonce,omitempty" yaml:"nonce,omitempty"`
-	Policy    *policyengine.Config `json:"policy,omitempty" yaml:"policy,omitempty"`
-	Token     *tokenstore.Config   `json:"token,omitempty" yaml:"token,omitempty"`
-	Keytab    *keytabstore.Config  `json:"keytab,omitempty" yaml:"keytab,omitempty"`
-}
-
-// NewConfig ...
+// NewConfig Returns new config
 func NewConfig() *Config {
 	return &Config{
-		Nonce:  noncestore.NewConfig(),
-		Policy: policyengine.NewConfig(),
-		Token:  tokenstore.NewConfig(),
-		Keytab: keytabstore.NewConfig(),
+		Nonce:  &nonces.Config{},
+		Token:  &tokens.Config{},
+		Keytab: &keytabs.Config{},
 	}
 }
 
-// NewExampleConfig ...
-func NewExampleConfig() *Config {
-	return &Config{
-		Listen:    "any",
-		HTTPPort:  8080,
-		HTTPSPort: 8443,
-		Nonce:     noncestore.NewExampleConfig(),
-		Policy:    policyengine.NewExampleConfig(),
-		Token:     tokenstore.NewExampleConfig(),
-		Keytab:    keytabstore.NewExampleConfig(),
-	}
-}
-
-// JSON Returns JSON string representation of entity
-func (t *Config) JSON() string {
-	e, err := json.Marshal(t)
-	if err != nil {
-		panic(err.Error())
-	}
-	return string(e)
-}
-
-// YAML Returns YAML string representation of entity
-func (t *Config) YAML() string {
-	e, err := yaml.Marshal(t)
-	if err != nil {
-		panic(err.Error())
-	}
-	return string(e)
-}
-
-// ConfigFromJSON Returns entity from JSON string
-func ConfigFromJSON(b []byte) (*Config, error) {
-	var t Config
-	err := json.Unmarshal(b, &t)
-	if err != nil {
-		return nil, err
-	}
-	return &t, nil
-}
-
-// ConfigFromYAML Returns entity from YAML string
-func ConfigFromYAML(b []byte) (*Config, error) {
-	var t Config
-	err := yaml.Unmarshal(b, &t)
-	if err != nil {
-		return nil, err
-	}
-	return &t, nil
+// Config ...
+type Config struct {
+	Listen    string          `json:"Listen,omitempty" yaml:"Listen,omitempty"`
+	HTTPPort  int             `json:"httpPort,omitempty" yaml:"httpPort,omitempty"`
+	HTTPSPort int             `json:"httpsPort,omitempty" yaml:"httpsPort,omitempty"`
+	Query     string          `json:"query,omitempty" yaml:"query,omitempty"`
+	Policy    string          `json:"policy,omitempty" yaml:"policy,omitempty"`
+	Nonce     *nonces.Config  `json:"nonce,omitempty" yaml:"nonce,omitempty"`
+	Token     *tokens.Config  `json:"token,omitempty" yaml:"token,omitempty"`
+	Keytab    *keytabs.Config `json:"keytab,omitempty" yaml:"keytab,omitempty"`
 }
 
 // Server ...
 type Server struct {
-	closed       chan struct{}
-	wg           sync.WaitGroup
-	tokenStore   *tokenstore.TokenStore
-	keytabStore  *keytabstore.KeytabStore
-	nonceStore   *noncestore.NonceStore
-	policyEngine *policyengine.PolicyEngine
-	httpServer   *http.Server
+	closed      chan struct{}
+	wg          sync.WaitGroup
+	tokenStore  *tokens.Cache
+	keytabStore *keytabs.Cache
+	nonceStore  *nonces.Cache
+	httpServer  *http.Server
+	policy      *policy
 }
 
-// NewServer ...
-func NewServer(config *Config) (*Server, error) {
+// Build Returns a new Server
+func (config *Config) Build() (*Server, error) {
 
 	zap.L().Info(fmt.Sprintf("Starting"))
 
@@ -122,42 +69,47 @@ func NewServer(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("Must enable http or https")
 	}
 
-	tokenstore, err := tokenstore.NewTokenStore(config.Token)
+	tokenstore, err := config.Token.Build()
 	if err != nil {
 		return nil, err
 	}
 
-	keytabStore, err := keytabstore.NewKeytabStore(config.Keytab)
+	keytabStore, err := config.Keytab.Build()
 	if err != nil {
 		return nil, err
 	}
 
-	nonceStore, err := noncestore.NewNonceStore(config.Nonce)
+	nonceStore, err := config.Nonce.Build()
 	if err != nil {
 		return nil, err
 	}
 
-	policyEngine, err := policyengine.NewPolicyEngine(config.Policy)
+	policyConfig := &policyConfig{
+		Query:  config.Query,
+		Policy: config.Policy,
+	}
+	policy, err := policyConfig.build()
 	if err != nil {
 		return nil, err
 	}
 
 	server := &Server{
-		closed:       make(chan struct{}),
-		tokenStore:   tokenstore,
-		keytabStore:  keytabStore,
-		nonceStore:   nonceStore,
-		policyEngine: policyEngine,
+		closed:      make(chan struct{}),
+		tokenStore:  tokenstore,
+		keytabStore: keytabStore,
+		nonceStore:  nonceStore,
+		policy:      policy,
 	}
 
 	go func() {
 
 		if config.HTTPPort > 0 {
 			go func() {
-				listener := ":" + strconv.Itoa(config.HTTPPort)
-				if config.Listen != "" && config.Listen != "any" {
-					listener = config.Listen + ":" + strconv.Itoa(config.HTTPPort)
+				listen := config.Listen
+				if strings.ToLower(listen) == "any" {
+					listen = ""
 				}
+				listener := listen + ":" + strconv.Itoa(config.HTTPPort)
 				zap.L().Debug("Starting HTTP")
 				server.httpServer = &http.Server{Addr: listener, Handler: server}
 				server.httpServer.ListenAndServe()
@@ -212,7 +164,7 @@ func (t *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if handleERR(w, err) {
 			return
 		}
-		fmt.Fprintf(w, nonce.JSON()+"\n")
+		fmt.Fprintf(w, toJSON(nonce)+"\n")
 		w.WriteHeader(http.StatusOK)
 		return
 
@@ -229,7 +181,7 @@ func (t *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		fmt.Fprintf(w, keytab.JSON()+"\n")
+		fmt.Fprintf(w, toJSON(keytab)+"\n")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -241,7 +193,7 @@ func (t *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (t *Server) newNonce(ctx context.Context, token string) (*noncestore.Nonce, error) {
+func (t *Server) newNonce(ctx context.Context, token string) (*nonces.Nonce, error) {
 
 	if token == "" {
 		err := fmt.Errorf("Authorization denied")
@@ -252,8 +204,6 @@ func (t *Server) newNonce(ctx context.Context, token string) (*noncestore.Nonce,
 	shortToken := token[1:8] + "..."
 
 	xtoken, err := t.tokenStore.GetToken(token)
-
-	fmt.Println(xtoken.JSON())
 
 	if err != nil {
 		zap.L().Debug(fmt.Sprintf("NewNonce(%s)->[err=%s]", shortToken, err))
@@ -267,7 +217,7 @@ func (t *Server) newNonce(ctx context.Context, token string) (*noncestore.Nonce,
 	}
 
 	// Validate that token is allowed to pull nonce
-	decision, err := t.policyEngine.RenderDecision(ctx, xtoken)
+	decision, err := t.policy.renderDecision(ctx, xtoken)
 	if err != nil {
 		zap.L().Debug(fmt.Sprintf("NewNonce(%s)->[err=%s]", shortToken, err))
 		return nil, err
@@ -282,14 +232,8 @@ func (t *Server) newNonce(ctx context.Context, token string) (*noncestore.Nonce,
 	nonce := t.nonceStore.NewNonce()
 	shortNonce := nonce.Value[1:8] + "..."
 
-	// Make a copy of the entity to hand out so that encapsulation is preserved
-	clone := &noncestore.Nonce{}
-	err = copier.Copy(&clone, &nonce)
-	if err != nil {
-		panic(err)
-	}
 	zap.L().Debug(fmt.Sprintf("NewNonce(%s)->[%s]", shortToken, shortNonce))
-	return clone, nil
+	return nonce, nil
 }
 
 func newErrorResponse(message string) string {
@@ -326,7 +270,7 @@ func getKey(r *http.Request, name string) string {
 	return string(keys[0])
 }
 
-func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keytabstore.Keytab, error) {
+func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keytabs.Keytab, error) {
 
 	shortToken := ""
 
@@ -372,13 +316,13 @@ func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keyta
 		return nil, err
 	}
 
-	decision, err := t.policyEngine.RenderDecision(ctx, xtoken)
+	decision, err := t.policy.renderDecision(ctx, xtoken)
 	if err != nil {
 		zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[err=%s]", shortToken, principal, err))
 		return nil, err
 	}
 
-	if !decision.HasPrincipal(principal) {
+	if !decision.hasPrincipal(principal) {
 		err = fmt.Errorf("Authorization denied")
 		zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[err=%s]", shortToken, principal, err))
 		return nil, err
@@ -391,18 +335,18 @@ func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keyta
 		return nil, err
 	}
 
-	clone := &keytabstore.Keytab{}
-	err = copier.Copy(&clone, &keytab)
-	if err != nil {
-		panic(err)
-	}
-
 	zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[valid keytab]", shortToken, principal))
-	return clone, nil
+	return keytab, nil
 
 }
 
-// Shutdown ...
+func toJSON(e interface{}) string {
+	// Log error and return valid JSON with err in it
+	j, _ := json.Marshal(e)
+	return string(j)
+}
+
+// Shutdown Server
 func (t *Server) Shutdown() {
 	close(t.closed)
 	t.wg.Wait()

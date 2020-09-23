@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -14,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jodydadescott/kerberos-bridge/config"
 	"github.com/jodydadescott/kerberos-bridge/internal/server"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -33,20 +32,6 @@ var rootCmd = &cobra.Command{
 	by validating token is permitted keytab by policy. Policy is
 	in the form of Open Policy Agent (OPA). Keytabs may be used
 	to generate kerberos tickets and then discarded.`,
-}
-
-var _httpClient *http.Client
-
-func getHTTPClient() *http.Client {
-	if _httpClient == nil {
-		_httpClient = &http.Client{
-			Transport: &http.Transport{
-				MaxIdleConnsPerHost: maxIdleConnections,
-			},
-			Timeout: time.Duration(requestTimeout) * time.Second,
-		}
-	}
-	return _httpClient
 }
 
 var configCmd = &cobra.Command{
@@ -101,21 +86,19 @@ var configExampleCmd = &cobra.Command{
 			outputFileOrDev = args[0]
 		}
 
-		config := NewExampleConfig()
-
 		configString := ""
 		switch strings.ToLower(viper.GetString("format")) {
 
 		case "yaml":
-			configString = config.YAML()
+			configString = config.ExampleConfigYAML()
 			break
 
 		case "json":
-			configString = config.JSON()
+			configString = config.ExampleConfigJSON()
 			break
 
 		case "":
-			configString = config.YAML()
+			configString = config.ExampleConfigYAML()
 			break
 
 		default:
@@ -131,57 +114,13 @@ var configExampleCmd = &cobra.Command{
 	},
 }
 
-func getRuntimeConfig() (*Config, error) {
-
-	runtimeConfigString := viper.GetString("config")
-	runtimeConfigStringSource := "arg"
-
-	if runtimeConfigString == "" {
-		tmp, err := getRuntimeConfigString()
-		if err != nil {
-			return nil, err
-		}
-		runtimeConfigString = tmp
-		runtimeConfigStringSource = "system"
-	}
-
-	if runtimeConfigString == "" {
-		return nil, errors.New("runtime config string not found")
-	}
-
-	fmt.Fprintln(os.Stderr, fmt.Sprintf("Using runtime config string %s from %s", runtimeConfigString, runtimeConfigStringSource))
-
-	if strings.HasPrefix(runtimeConfigString, "https://") || strings.HasPrefix(runtimeConfigString, "http://") {
-		config, err := getConfigFromURI(runtimeConfigString)
-		if err != nil {
-			return nil, err
-		}
-		return config, nil
-	}
-
-	config, err := getConfigFromFile(runtimeConfigString)
-	if err != nil {
-		return nil, err
-	}
-	return config, err
-}
-
 var serverCmd = &cobra.Command{
 	Use:   "start",
 	Short: "start server",
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		config, err := getRuntimeConfig()
-		if err != nil {
-			return err
-		}
-
-		if config.ServerConfig == nil {
-			return errors.New("ServerConfig is missing from config")
-		}
-
-		zapConfig, err := config.ZapConfig()
+		serverConfig, zapConfig, err := getConfigs()
 		if err != nil {
 			return err
 		}
@@ -207,7 +146,7 @@ var serverCmd = &cobra.Command{
 		sig := make(chan os.Signal, 2)
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
-		server, err := server.NewServer(config.ServerConfig)
+		server, err := serverConfig.Build()
 		if err != nil {
 			return err
 		}
@@ -240,11 +179,47 @@ func init() {
 	viper.BindPFlag("config", serverCmd.PersistentFlags().Lookup("config"))
 }
 
-func getConfigFromFile(filename string) (*Config, error) {
+func getHTTPClient() *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: maxIdleConnections,
+		},
+		Timeout: time.Duration(requestTimeout) * time.Second,
+	}
+}
+
+func getConfigs() (*server.Config, *zap.Config, error) {
+
+	bootConfigLocation := viper.GetString("config")
+	runtimeConfigStringSource := "arg"
+
+	if bootConfigLocation == "" {
+		tmp, err := getRuntimeConfigString()
+		if err != nil {
+			return nil, nil, err
+		}
+		bootConfigLocation = tmp
+		runtimeConfigStringSource = "system"
+	}
+
+	if bootConfigLocation == "" {
+		return nil, nil, errors.New("runtime config string not found")
+	}
+
+	fmt.Fprintln(os.Stderr, fmt.Sprintf("Using runtime config string %s from %s", bootConfigLocation, runtimeConfigStringSource))
+
+	if strings.HasPrefix(bootConfigLocation, "https://") || strings.HasPrefix(bootConfigLocation, "http://") {
+		return getConfigsFromURI(bootConfigLocation)
+	}
+
+	return getConfigsFromFile(bootConfigLocation)
+}
+
+func getConfigsFromFile(filename string) (*server.Config, *zap.Config, error) {
 
 	f, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	defer f.Close()
@@ -252,56 +227,40 @@ func getConfigFromFile(filename string) (*Config, error) {
 	reader := bufio.NewReader(f)
 	content, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return getConfigFromBytes(content)
+	return config.ConfigsFromBytes(content)
 }
 
-func getConfigFromBytes(input []byte) (*Config, error) {
-
-	var config *Config
-	err0 := yaml.Unmarshal(input, &config)
-	if err0 == nil {
-		return config, nil
-	}
-
-	err := json.Unmarshal(input, &config)
-	if err == nil {
-		return config, nil
-	}
-
-	return nil, err0
-}
-
-func getConfigFromURI(uri string) (*Config, error) {
+func getConfigsFromURI(uri string) (*server.Config, *zap.Config, error) {
 
 	fmt.Fprintln(os.Stderr, fmt.Sprintf("Getting config from %s", uri))
 
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	resp, err := getHTTPClient().Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
-	}
-
-	config, err := getConfigFromBytes(b)
-	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(fmt.Sprintf("%s returned status code %d", uri, resp.StatusCode))
+		return nil, nil, fmt.Errorf(fmt.Sprintf("%s returned status code %d", uri, resp.StatusCode))
 	}
 
-	return config, nil
+	serverConfig, zapConfig, err := config.ConfigsFromBytes(b)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return serverConfig, zapConfig, nil
 }

@@ -1,6 +1,7 @@
 package cachemap
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -22,7 +23,6 @@ type CacheMap struct {
 // map knows when to eject entity. JSON() is used for logging transactions.
 type Entity interface {
 	Valid() bool
-	JSON() string
 }
 
 // NewCacheMap returns new cachemap. CacheMap holds structs that implement the Entity
@@ -81,7 +81,7 @@ func (t *CacheMap) Put(key string, e Entity) error {
 	defer t.mutex.Unlock()
 	t.internal[key] = e
 
-	zap.L().Info(fmt.Sprintf("Adding entity %s to cache %s", e.JSON(), t.name))
+	zap.L().Info(fmt.Sprintf("Adding entity %s to cache %s", toJSON(e), t.name))
 	return nil
 }
 
@@ -112,7 +112,7 @@ func (t *CacheMap) cleanup() {
 			// zap.L().Debug(fmt.Sprintf("Preserving entity %s", e.JSON()))
 		} else {
 			removes = append(removes, key)
-			zap.L().Info(fmt.Sprintf("Ejecting entity %s from cache %s", e.JSON(), t.name))
+			zap.L().Info(fmt.Sprintf("Ejecting entity %s from cache %s", toJSON(e), t.name))
 		}
 	}
 
@@ -122,4 +122,9 @@ func (t *CacheMap) cleanup() {
 		}
 	}
 
+}
+
+func toJSON(e interface{}) string {
+	j, _ := json.Marshal(e)
+	return string(j)
 }
