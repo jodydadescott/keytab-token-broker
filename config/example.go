@@ -20,8 +20,8 @@ get_principals[grant] {
 }
 `
 
-func v1ExampleConfig() *V1 {
-	return &V1{
+func v1ExampleConfig() *Config {
+	return &Config{
 		APIVersion: "V1",
 		Network: &Network{
 			Listen:    "any",

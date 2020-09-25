@@ -1,22 +1,19 @@
-// +build  darwin
+// +build linux
 
-package cmd
+package configloader
 
 import (
 	"bufio"
-	"fmt"
 	"io/ioutil"
 	"os"
 
 	"github.com/mitchellh/go-homedir"
-	"go.uber.org/zap/zapcore"
 )
 
-var staticRuntimeConfigFile = "/Library/kbridge-runtime.conf"
+var staticRuntimeConfigFile = "/.kbridge-runtime"
 
-// var staticRuntimeConfigFile = "/Users/jscott/Library/kbridge-runtime.conf"
-
-func getRuntimeConfigString() (string, error) {
+// GetRuntimeConfigString ...
+func GetRuntimeConfigString() (string, error) {
 
 	home, err := homedir.Dir()
 	if err != nil {
@@ -38,7 +35,8 @@ func getRuntimeConfigString() (string, error) {
 	return string(content), nil
 }
 
-func setRuntimeConfigString(runtimeConfigString string) error {
+// SetRuntimeConfigString ...
+func SetRuntimeConfigString(runtimeConfigString string) error {
 
 	home, err := homedir.Dir()
 	if err != nil {
@@ -46,8 +44,4 @@ func setRuntimeConfigString(runtimeConfigString string) error {
 	}
 
 	return ioutil.WriteFile(home+staticRuntimeConfigFile, []byte(runtimeConfigString), 0644)
-}
-
-func getZapHook() (func(zapcore.Entry) error, error) {
-	return nil, fmt.Errorf("Not supported")
 }

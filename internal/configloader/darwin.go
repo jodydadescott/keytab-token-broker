@@ -1,6 +1,6 @@
-// +build linux
+// +build  darwin
 
-package cmd
+package configloader
 
 import (
 	"bufio"
@@ -12,9 +12,10 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var staticRuntimeConfigFile = "/.kbridge-runtime"
+var staticRuntimeConfigFile = "/Library/kbridge-runtime.conf"
 
-func getRuntimeConfigString() (string, error) {
+// GetRuntimeConfigString ...
+func GetRuntimeConfigString() (string, error) {
 
 	home, err := homedir.Dir()
 	if err != nil {
@@ -36,7 +37,8 @@ func getRuntimeConfigString() (string, error) {
 	return string(content), nil
 }
 
-func setRuntimeConfigString(runtimeConfigString string) error {
+// SetRuntimeConfigString ...
+func SetRuntimeConfigString(runtimeConfigString string) error {
 
 	home, err := homedir.Dir()
 	if err != nil {

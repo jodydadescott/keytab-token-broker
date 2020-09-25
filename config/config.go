@@ -1,18 +1,15 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/jodydadescott/kerberos-bridge/internal/server"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/yaml.v2"
 )
 
-// V1 Version 1 Config
-type V1 struct {
+// Config Config
+type Config struct {
 	APIVersion string   `json:"apiVersion,omitempty" yaml:"apiVersion,omitempty"`
 	Network    *Network `json:"network,omitempty" yaml:"network,omitempty"`
 	Policy     *Policy  `json:"policy,omitempty" yaml:"policy,omitempty"`
@@ -48,26 +45,45 @@ type Data struct {
 	KeytabPrincipals []string `json:"principals,omitempty" yaml:"principals,omitempty"`
 }
 
-// ConfigsFromBytes ...
-func ConfigsFromBytes(input []byte) (*server.Config, *zap.Config, error) {
+// ServerConfig Return Server Config
+func (t *Config) ServerConfig() (*server.Config, error) {
 
-	// Must check version
-	var config *V1
+	if t.APIVersion == "" {
+		return nil, fmt.Errorf("Missing APIVersion")
+	}
 
-	err := yaml.Unmarshal(input, &config)
-	if err != nil {
-		err = json.Unmarshal(input, &config)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Config is not valid json or yaml")
+	if t.APIVersion != "V1" {
+		return nil, fmt.Errorf(fmt.Sprintf("APIVersion %s not supported", t.APIVersion))
+	}
+
+	serverConfig := server.NewConfig()
+
+	if t.Network != nil {
+		serverConfig.Listen = t.Network.Listen
+		serverConfig.HTTPPort = t.Network.HTTPPort
+		serverConfig.HTTPSPort = t.Network.HTTPSPort
+	}
+
+	if t.Policy != nil {
+		serverConfig.Query = t.Policy.Query
+		serverConfig.Policy = t.Policy.Policy
+		serverConfig.Nonce.Lifetime = t.Policy.NonceLifetime
+		serverConfig.Keytab.Lifetime = t.Policy.KeytabLifetime
+	}
+
+	if t.Data != nil {
+		if t.Data.KeytabPrincipals != nil {
+			for _, s := range t.Data.KeytabPrincipals {
+				serverConfig.Keytab.Principals = append(serverConfig.Keytab.Principals, s)
+			}
 		}
 	}
 
-	return getConfigsFromV1(config)
+	return serverConfig, nil
 }
 
-func getConfigsFromV1(u *V1) (*server.Config, *zap.Config, error) {
-
-	serverConfig := server.NewConfig()
+// ZapConfig Return Zap Config
+func (t *Config) ZapConfig() (*zap.Config, error) {
 
 	zapConfig := &zap.Config{
 		Development: false,
@@ -78,38 +94,9 @@ func getConfigsFromV1(u *V1) (*server.Config, *zap.Config, error) {
 		EncoderConfig: zap.NewProductionEncoderConfig(),
 	}
 
-	if u.APIVersion == "" {
-		return nil, nil, fmt.Errorf("Missing APIVersion")
-	}
+	if t.Logging != nil {
 
-	if strings.ToUpper(u.APIVersion) != "V1" {
-		return nil, nil, fmt.Errorf(fmt.Sprintf("APIVersion %s not supported", u.APIVersion))
-	}
-
-	if u.Network != nil {
-		serverConfig.Listen = u.Network.Listen
-		serverConfig.HTTPPort = u.Network.HTTPPort
-		serverConfig.HTTPSPort = u.Network.HTTPSPort
-	}
-
-	if u.Policy != nil {
-		serverConfig.Query = u.Policy.Query
-		serverConfig.Policy = u.Policy.Policy
-		serverConfig.Nonce.Lifetime = u.Policy.NonceLifetime
-		serverConfig.Keytab.Lifetime = u.Policy.KeytabLifetime
-	}
-
-	if u.Data != nil {
-		if u.Data.KeytabPrincipals != nil {
-			for _, s := range u.Data.KeytabPrincipals {
-				serverConfig.Keytab.Principals = append(serverConfig.Keytab.Principals, s)
-			}
-		}
-	}
-
-	if u.Logging != nil {
-
-		switch u.Logging.LogLevel {
+		switch t.Logging.LogLevel {
 
 		case "debug":
 			zapConfig.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
@@ -131,10 +118,10 @@ func getConfigsFromV1(u *V1) (*server.Config, *zap.Config, error) {
 			zapConfig.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
 
 		default:
-			return nil, nil, fmt.Errorf("logging level must be debug, info (default), warn or error")
+			return nil, fmt.Errorf("logging level must be debug, info (default), warn or error")
 		}
 
-		switch u.Logging.LogFormat {
+		switch t.Logging.LogFormat {
 
 		case "json":
 			zapConfig.Encoding = "json"
@@ -149,22 +136,22 @@ func getConfigsFromV1(u *V1) (*server.Config, *zap.Config, error) {
 			break
 
 		default:
-			return nil, nil, fmt.Errorf("logging format must be json (default) or console")
+			return nil, fmt.Errorf("logging format must be json (default) or console")
 
 		}
 
-		if u.Logging.OutputPaths == nil || len(u.Logging.OutputPaths) <= 0 {
+		if t.Logging.OutputPaths == nil || len(t.Logging.OutputPaths) <= 0 {
 			zapConfig.OutputPaths = append(zapConfig.OutputPaths, "stderr")
 		} else {
-			for _, s := range u.Logging.OutputPaths {
+			for _, s := range t.Logging.OutputPaths {
 				zapConfig.OutputPaths = append(zapConfig.OutputPaths, s)
 			}
 		}
 
-		if u.Logging.ErrorOutputPaths == nil || len(u.Logging.ErrorOutputPaths) <= 0 {
+		if t.Logging.ErrorOutputPaths == nil || len(t.Logging.ErrorOutputPaths) <= 0 {
 			zapConfig.ErrorOutputPaths = append(zapConfig.ErrorOutputPaths, "stderr")
 		} else {
-			for _, s := range u.Logging.ErrorOutputPaths {
+			for _, s := range t.Logging.ErrorOutputPaths {
 				zapConfig.ErrorOutputPaths = append(zapConfig.ErrorOutputPaths, s)
 			}
 		}
@@ -178,5 +165,5 @@ func getConfigsFromV1(u *V1) (*server.Config, *zap.Config, error) {
 
 	}
 
-	return serverConfig, zapConfig, nil
+	return zapConfig, nil
 }

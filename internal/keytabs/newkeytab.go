@@ -2,6 +2,7 @@ package keytabs
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -44,12 +45,21 @@ func unixNewKeytab(principal string) (string, error) {
 // ktpass -out $file -mapUser $principal +rndPass -mapOp set -crypto AES256-SHA1 -ptype KRB5_NT_PRINCIPAL -princ HTTP/$principal
 func windowsNewKeytab(principal string) (string, error) {
 
-	tmpFile := tmpFile()
+	// I noticed that if running as a service that does not have Domain Admin privs the
+	// ktpass command fails silently.
+
+	dir, err := ioutil.TempDir("", "kt")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(dir)
+
+	filename := dir + `\file.keytab`
 
 	exe := "C:\\Windows\\System32\\ktpass"
 	args := []string{}
 	args = append(args, "-out")
-	args = append(args, tmpFile)
+	args = append(args, filename)
 	args = append(args, "-mapUser")
 	args = append(args, principal)
 	args = append(args, "+rndPass")
@@ -62,21 +72,28 @@ func windowsNewKeytab(principal string) (string, error) {
 	args = append(args, "-princ")
 	args = append(args, "HTTP/"+principal)
 
-	cmd := exec.Command(exe, args...)
+	logarg := exe
+	for _, arg := range args {
+		logarg = logarg + " " + arg
+	}
 
-	err := cmd.Run()
+	zap.L().Debug(fmt.Sprintf("command->%s", logarg))
+
+	cmd := exec.Command(exe, args...)
+	cmdOutput := &bytes.Buffer{}
+	cmd.Stdout = cmdOutput
+	err = cmd.Run()
 	if err != nil {
 		zap.L().Error(fmt.Sprintf("exec.Command(%s, %s)", exe, args))
 		return "", err
 	}
 
-	f, err := os.Open(tmpFile)
+	zap.L().Debug(fmt.Sprintf("command->%s, output->%s", logarg, string(cmdOutput.Bytes())))
+
+	f, err := os.Open(filename)
 	if err != nil {
 		return "", err
 	}
-
-	defer f.Close()
-	defer os.Remove(f.Name())
 
 	reader := bufio.NewReader(f)
 	content, err := ioutil.ReadAll(reader)

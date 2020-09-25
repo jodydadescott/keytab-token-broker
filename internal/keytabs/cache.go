@@ -2,8 +2,6 @@ package keytabs
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"regexp"
 	"runtime"
 	"sync"
@@ -318,16 +316,4 @@ func (t *Cache) newKeytab(principal string) (*Keytab, error) {
 func (t *Cache) Shutdown() {
 	close(t.closed)
 	t.wg.Wait()
-}
-
-// Create a tmp file and then delete it. This way we know we can write to
-// the temp location. Then return the full path to the file as a string.
-func tmpFile() string {
-	f, err := ioutil.TempFile("", "keytab")
-	if err != nil {
-		panic(err.Error())
-	}
-	f.Close()
-	os.Remove(f.Name())
-	return f.Name()
 }

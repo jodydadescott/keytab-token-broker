@@ -3,7 +3,7 @@ default:
 
 windows:
 	mkdir -p dist
-	env GOOS=windows GOARCH=amd64 go build -o dist/kbridge-win-amd64.exe main.go
+	env GOOS=windows GOARCH=amd64 go build -o dist/kbridge.exe main.go
 
 linux:
 	mkdir -p dist
