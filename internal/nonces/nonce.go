@@ -1,7 +1,25 @@
+/*
+Copyright © 2020 Jody Scott <jody@thescottsweb.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package nonces
 
 import (
-	"time"
+	"encoding/json"
+
+	"github.com/jinzhu/copier"
 )
 
 // Nonce holds one time expiring secret
@@ -10,10 +28,25 @@ type Nonce struct {
 	Value string `json:"value,omitempty" yaml:"value,omitempty"`
 }
 
-// Valid Returns true if entity is valid
-func (t *Nonce) Valid() bool {
-	if t.Exp > 0 && t.Exp > time.Now().Unix() {
-		return true
-	}
-	return false
+// Expiration ...
+func (t *Nonce) Expiration() int64 {
+	return t.Exp
+}
+
+// Key ...
+func (t *Nonce) Key() string {
+	return t.Value
+}
+
+// JSON ...
+func (t *Nonce) JSON() string {
+	j, _ := json.Marshal(t)
+	return string(j)
+}
+
+// Clone return copy
+func (t *Nonce) Clone() *Nonce {
+	clone := &Nonce{}
+	copier.Copy(&clone, &t)
+	return clone
 }

@@ -1,3 +1,19 @@
+/*
+Copyright © 2020 Jody Scott <jody@thescottsweb.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package keytabs
 
 import (
@@ -13,16 +29,20 @@ import (
 	"go.uber.org/zap"
 )
 
-func unixNewKeytab(principal string) (string, error) {
-	return fmt.Sprintf("This is not a valid keytab file because the OS %s is not supported. Only Windows is supported at this time", runtime.GOOS), nil
-}
-
-// Use the Windows ktpass utility to generate a keytab. This must be
-// executed on a Windows OS that is either a domain controller or a member
-// of the desired domain. The password will be randomly created by the
-// ktpass utility and unknown to us.
-// ktpass
-// Executable file locationL C:\Windows\System32\ktpass
+// Windows Kerberos Implementation (Active Directory) allows for the creation
+// of principals that are mapped to a user account. Only one principal may be
+// mapped to a user account at a time. Once a keytab is created it will remain
+// valid until the principal is removed  or the password is changed or a new
+// keytab is created. The windows utility ktpass is used to create the keytabs.
+// The ktpass command is executed directly on the host. Therefore this should
+// be ran on a Windows system that is a member of the target domain. It must
+// also be ran with privileges to allow the creation of keytabs. Generally this
+// is a Domain Admin. If running as a service it is necessary that it be
+// configured to run as a domain admin or user with the privileges necessary
+// to create keytabs.
+//
+// Information about the ktpass utility is as follows
+// Exe: C:\Windows\System32\ktpass
 // Documentation: https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/cc753771(v=ws.11)
 // [/out <FileName>]
 // [/princ <PrincipalName>]
@@ -40,13 +60,15 @@ func unixNewKeytab(principal string) (string, error) {
 // [/rawsalt] [{-|+}dumpsalt] [{-|+}setupn] [{-|+}setpass <Password>]  [/?|/h|/help]
 //
 // Use +DumpSalt to dump MIT Salt to output
-
-// Our syntax
-// ktpass -out $file -mapUser $principal +rndPass -mapOp set -crypto AES256-SHA1 -ptype KRB5_NT_PRINCIPAL -princ HTTP/$principal
+//
+// Notes about ktpass failure functionality
+// Testing on Windows Server 2019 reveals that if the user lacks the
+// privileges to create keytabs the ktpass utility does not create the
+// keytab but also still exits with 0 and nothing is sent to the stdout
+// This was with a service account and stderr was not checked. For this
+// reason we will return an auth err if the file does not exist. This
+// should be refined in the future.
 func windowsNewKeytab(principal string) (string, error) {
-
-	// I noticed that if running as a service that does not have Domain Admin privs the
-	// ktpass command fails silently.
 
 	dir, err := ioutil.TempDir("", "kt")
 	if err != nil {
@@ -77,7 +99,7 @@ func windowsNewKeytab(principal string) (string, error) {
 		logarg = logarg + " " + arg
 	}
 
-	zap.L().Debug(fmt.Sprintf("command->%s", logarg))
+	//zap.L().Debug(fmt.Sprintf("command->%s", logarg))
 
 	cmd := exec.Command(exe, args...)
 	cmdOutput := &bytes.Buffer{}
@@ -88,7 +110,7 @@ func windowsNewKeytab(principal string) (string, error) {
 		return "", err
 	}
 
-	zap.L().Debug(fmt.Sprintf("command->%s, output->%s", logarg, string(cmdOutput.Bytes())))
+	// zap.L().Debug(fmt.Sprintf("command->%s, output->%s", logarg, string(cmdOutput.Bytes())))
 
 	f, err := os.Open(filename)
 	if err != nil {
@@ -102,4 +124,8 @@ func windowsNewKeytab(principal string) (string, error) {
 	}
 
 	return base64.StdEncoding.EncodeToString(content), nil
+}
+
+func unixNewKeytab(principal string) (string, error) {
+	return fmt.Sprintf("This is not a valid keytab file because the OS %s is not supported. Only Windows is supported at this time", runtime.GOOS), nil
 }

@@ -234,21 +234,20 @@ func (m *myservice) Execute(args []string, r <-chan svc.ChangeRequest, changes c
 	fasttick := time.Tick(10 * time.Second)
 	slowtick := time.Tick(60 * time.Second)
 	tick := fasttick
-	// *eventlog.Log
 
-	config, err := configloader.GetConfigs()
+	configLoader, err := configloader.NewConfigLoader()
 	if err != nil {
 		elog.Error(10, err.Error())
 		return false, 2
 	}
 
-	serverConfig, err := config.ServerConfig()
+	serverConfig, err := configLoader.ServerConfig()
 	if err != nil {
 		elog.Error(11, err.Error())
 		return false, 2
 	}
 
-	zapConfig, err := config.ZapConfig()
+	zapConfig, err := configLoader.ZapConfig()
 	if err != nil {
 		elog.Error(12, err.Error())
 		return false, 2

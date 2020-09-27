@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -17,8 +16,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// ErrExpired ...
-var ErrExpired error = errors.New("Expired")
+var (
+	// ErrAuthFail ...
+	ErrAuthFail error = errors.New("Authorization Failure")
+	// ErrNotFound ...
+	ErrNotFound error = errors.New("Matching attribute not found")
+)
 
 // NewConfig Returns new config
 func NewConfig() *Config {
@@ -45,9 +48,9 @@ type Config struct {
 type Server struct {
 	closed      chan struct{}
 	wg          sync.WaitGroup
-	tokenStore  *tokens.Cache
-	keytabStore *keytabs.Cache
-	nonceStore  *nonces.Cache
+	tokenCache  *tokens.TokenCache
+	keytabCache *keytabs.KeytabCache
+	nonceCache  *nonces.NonceCache
 	httpServer  *http.Server
 	policy      *policy
 }
@@ -69,17 +72,17 @@ func (config *Config) Build() (*Server, error) {
 		return nil, fmt.Errorf("Must enable http or https")
 	}
 
-	tokenstore, err := config.Token.Build()
+	tokenCache, err := config.Token.Build()
 	if err != nil {
 		return nil, err
 	}
 
-	keytabStore, err := config.Keytab.Build()
+	keytabCache, err := config.Keytab.Build()
 	if err != nil {
 		return nil, err
 	}
 
-	nonceStore, err := config.Nonce.Build()
+	nonceCache, err := config.Nonce.Build()
 	if err != nil {
 		return nil, err
 	}
@@ -95,9 +98,9 @@ func (config *Config) Build() (*Server, error) {
 
 	server := &Server{
 		closed:      make(chan struct{}),
-		tokenStore:  tokenstore,
-		keytabStore: keytabStore,
-		nonceStore:  nonceStore,
+		tokenCache:  tokenCache,
+		keytabCache: keytabCache,
+		nonceCache:  nonceCache,
 		policy:      policy,
 	}
 
@@ -123,7 +126,7 @@ func (config *Config) Build() (*Server, error) {
 		for {
 			select {
 			case <-server.closed:
-				zap.L().Info("Shutting down")
+				zap.L().Debug("Shutting down")
 
 				if server.httpServer != nil {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -131,219 +134,15 @@ func (config *Config) Build() (*Server, error) {
 					server.httpServer.Shutdown(ctx)
 				}
 
-				server.keytabStore.Shutdown()
-				server.tokenStore.Shutdown()
-				server.nonceStore.Shutdown()
+				server.keytabCache.Shutdown()
+				server.tokenCache.Shutdown()
+				server.nonceCache.Shutdown()
 
 			}
 		}
 	}()
 
 	return server, nil
-}
-
-// ServeHTTP HTTP/HTTPS Handler
-func (t *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
-	zap.L().Debug(fmt.Sprintf("Entering ServeHTTP path=%s method=%s", r.URL.Path, r.Method))
-
-	defer zap.L().Debug(fmt.Sprintf("Exiting ServeHTTP path=%s method=%s", r.URL.Path, r.Method))
-
-	w.Header().Set("Content-Type", "application/json")
-
-	token := getBearerToken(r)
-
-	if token == "" {
-		sendERR(w, "Token required")
-		return
-	}
-
-	switch r.URL.Path {
-	case "/getnonce":
-		nonce, err := t.newNonce(r.Context(), token)
-		if handleERR(w, err) {
-			return
-		}
-		fmt.Fprintf(w, toJSON(nonce)+"\n")
-		w.WriteHeader(http.StatusOK)
-		return
-
-	case "/getkeytab":
-
-		principal := getKey(r, "principal")
-		if principal == "" {
-			sendERR(w, "Principal required")
-			return
-		}
-
-		keytab, err := t.getKeytab(r.Context(), token, principal)
-		if handleERR(w, err) {
-			return
-		}
-
-		fmt.Fprintf(w, toJSON(keytab)+"\n")
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	fmt.Fprintf(w, newErrorResponse("Path "+r.URL.Path+" not mapped")+"\n")
-	w.WriteHeader(http.StatusConflict)
-
-	zap.L().Debug(fmt.Sprintf("Exiting ServeHTTP"))
-
-}
-
-func (t *Server) newNonce(ctx context.Context, token string) (*nonces.Nonce, error) {
-
-	if token == "" {
-		err := fmt.Errorf("Authorization denied")
-		zap.L().Debug("Token is empty")
-		return nil, err
-	}
-
-	shortToken := token[1:8] + "..."
-
-	xtoken, err := t.tokenStore.GetToken(token)
-
-	if err != nil {
-		zap.L().Debug(fmt.Sprintf("NewNonce(%s)->[err=%s]", shortToken, err))
-		return nil, err
-	}
-
-	// Token may exist in cache but be expired
-	if !xtoken.Valid() {
-		zap.L().Debug(fmt.Sprintf("NewNonce(%s)->[err=%s]", shortToken, ErrExpired))
-		return nil, ErrExpired
-	}
-
-	// Validate that token is allowed to pull nonce
-	decision, err := t.policy.renderDecision(ctx, xtoken)
-	if err != nil {
-		zap.L().Debug(fmt.Sprintf("NewNonce(%s)->[err=%s]", shortToken, err))
-		return nil, err
-	}
-
-	if !decision.GetNonce {
-		err = fmt.Errorf("Authorization denied")
-		zap.L().Debug(fmt.Sprintf("NewNonce(%s)->[err=%s]", shortToken, err))
-		return nil, err
-	}
-
-	nonce := t.nonceStore.NewNonce()
-	shortNonce := nonce.Value[1:8] + "..."
-
-	zap.L().Debug(fmt.Sprintf("NewNonce(%s)->[%s]", shortToken, shortNonce))
-	return nonce, nil
-}
-
-func newErrorResponse(message string) string {
-	return "{\"error\":\"" + message + "\"}"
-}
-
-func sendERR(w http.ResponseWriter, message string) {
-	fmt.Fprintf(w, newErrorResponse(message)+"\n")
-	w.WriteHeader(http.StatusConflict)
-}
-
-func handleERR(w http.ResponseWriter, err error) bool {
-	if err == nil {
-		return false
-	}
-	fmt.Fprintf(w, newErrorResponse(err.Error())+"\n")
-	w.WriteHeader(http.StatusConflict)
-	return true
-}
-
-func getBearerToken(r *http.Request) string {
-	token := r.Header.Get("Authorization")
-	if token != "" {
-		return token
-	}
-	return getKey(r, "bearertoken")
-}
-
-func getKey(r *http.Request, name string) string {
-	keys, ok := r.URL.Query()[name]
-	if !ok || len(keys[0]) < 1 {
-		return ""
-	}
-	return string(keys[0])
-}
-
-func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keytabs.Keytab, error) {
-
-	shortToken := ""
-
-	if token == "" || principal == "" {
-		var err error
-
-		if token == "" && principal == "" {
-			err = fmt.Errorf("Token and Principal are empty")
-		} else if token == "" {
-			err = fmt.Errorf("Token is empty")
-		} else {
-			err = fmt.Errorf("Principal is empty")
-		}
-
-		shortToken = token[1:8] + ".."
-		zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[err=%s]", shortToken, principal, err))
-		return nil, err
-	}
-
-	shortToken = token[1:8] + ".."
-
-	xtoken, err := t.tokenStore.GetToken(token)
-	if err != nil {
-		zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[err=%s]", shortToken, principal, err))
-		return nil, err
-	}
-
-	// Token may exist in cahce but be expired
-	if !xtoken.Valid() {
-		zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[err=%s]", shortToken, principal, ErrExpired))
-		return nil, ErrExpired
-	}
-
-	if xtoken.Aud == "" {
-		err = fmt.Errorf("Audience is empty")
-		zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[err=%s]", shortToken, principal, err))
-		return nil, err
-	}
-
-	_, err = t.nonceStore.GetNonce(xtoken.Aud)
-	if err != nil {
-		zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[err=%s]", shortToken, principal, err))
-		return nil, err
-	}
-
-	decision, err := t.policy.renderDecision(ctx, xtoken)
-	if err != nil {
-		zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[err=%s]", shortToken, principal, err))
-		return nil, err
-	}
-
-	if !decision.hasPrincipal(principal) {
-		err = fmt.Errorf("Authorization denied")
-		zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[err=%s]", shortToken, principal, err))
-		return nil, err
-	}
-
-	keytab, err := t.keytabStore.GetKeytab(principal)
-
-	if err != nil {
-		zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[err=%s]", shortToken, principal, err))
-		return nil, err
-	}
-
-	zap.L().Debug(fmt.Sprintf("GetKeytab(token=%s,principal=%s)->[valid keytab]", shortToken, principal))
-	return keytab, nil
-
-}
-
-func toJSON(e interface{}) string {
-	// Log error and return valid JSON with err in it
-	j, _ := json.Marshal(e)
-	return string(j)
 }
 
 // Shutdown Server

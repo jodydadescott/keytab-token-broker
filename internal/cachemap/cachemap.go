@@ -1,13 +1,45 @@
+/*
+Copyright © 2020 Jody Scott <jody@thescottsweb.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package cachemap
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
 )
+
+// Entity ...
+type Entity interface {
+	Expiration() int64
+	Key() string
+	JSON() string
+}
+
+// Process ...
+// type Process func(Entity)
+
+// Config ...
+type Config struct {
+	CacheRefreshInterval int
+	Name                 string
+	//Process              Process
+}
 
 // CacheMap ...
 type CacheMap struct {
@@ -19,45 +51,37 @@ type CacheMap struct {
 	ticker   *time.Ticker
 }
 
-// Entity Interface type held in cache. Entity must implement Valid() so that cache
-// map knows when to eject entity. JSON() is used for logging transactions.
-type Entity interface {
-	Valid() bool
-}
+// Build ...
+func (c *Config) Build() (*CacheMap, error) {
 
-// NewCacheMap returns new cachemap. CacheMap holds structs that implement the Entity
-// interface. Perodically (cleanupIntervalSeconds) all entities will be polled by calling
-// Valid(). If the entity returns true it will be left. If it returns false it will be
-// removed.
-func NewCacheMap(name string, cleanupIntervalSeconds int) *CacheMap {
+	if c.Name == "" {
+		return nil, fmt.Errorf("name is empty")
+	}
 
-	zap.L().Debug("Starting")
-
-	if cleanupIntervalSeconds < 10 {
-		panic("cleanupIntervalSeconds must be 10 or greater")
+	if c.CacheRefreshInterval <= 0 {
+		return nil, fmt.Errorf("cacheRefreshInterval must be greater then zero")
 	}
 
 	cacheMap := &CacheMap{
+		name:     c.Name,
 		internal: make(map[string]Entity),
 		closed:   make(chan struct{}),
-		ticker:   time.NewTicker(time.Duration(cleanupIntervalSeconds) * time.Second),
+		ticker:   time.NewTicker(time.Duration(c.CacheRefreshInterval) * time.Second),
 	}
 
 	go func() {
 		for {
 			select {
 			case <-cacheMap.closed:
-				zap.L().Debug(fmt.Sprintf("Shutting down cache %s", cacheMap.name))
+				zap.L().Debug(fmt.Sprintf("Shutting down token cache %s", cacheMap.name))
 				return
 			case <-cacheMap.ticker.C:
-				zap.L().Debug(fmt.Sprintf("Running cleanup on cache %s", cacheMap.name))
-				cacheMap.cleanup()
-				zap.L().Debug(fmt.Sprintf("Completed cleanup on cache %s", cacheMap.name))
+
 			}
 		}
 	}()
 
-	return cacheMap
+	return cacheMap, nil
 }
 
 // Shutdown ...
@@ -66,53 +90,37 @@ func (t *CacheMap) Shutdown() {
 	t.wg.Wait()
 }
 
-// Put Puts entity into map. Entity must have a non-empty key.
-func (t *CacheMap) Put(key string, e Entity) error {
-
-	if e == nil {
-		return fmt.Errorf("entity is nil")
-	}
-
-	if key == "" {
-		return fmt.Errorf("key is nil")
-	}
-
+// Put ...
+func (t *CacheMap) Put(e Entity) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	t.internal[key] = e
-
-	zap.L().Info(fmt.Sprintf("Adding entity %s to cache %s", toJSON(e), t.name))
-	return nil
+	t.internal[e.Key()] = e
+	zap.L().Info(fmt.Sprintf("Cache %s: added to cache->%s", t.name, e.JSON()))
 }
 
-// Get Returns the entity if found and true or nil and false if entity is not found
-func (t *CacheMap) Get(key string) (Entity, bool) {
-
-	if key == "" {
-		zap.L().Debug(fmt.Sprintf("Key is empty"))
-		return nil, false
-	}
-
+// Get ...
+func (t *CacheMap) Get(key string) Entity {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
-	if e, exist := t.internal[key]; exist {
-		return e, true
-	}
-	return nil, false
+	w, _ := t.internal[key]
+	return w
 }
 
-func (t *CacheMap) cleanup() {
+func (t *CacheMap) processCache() {
+
+	zap.L().Debug(fmt.Sprintf("Processing %s cache", t.name))
 
 	var removes []string
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
 	for key, e := range t.internal {
-		if e.Valid() {
-			// zap.L().Debug(fmt.Sprintf("Preserving entity %s", e.JSON()))
-		} else {
+
+		if time.Now().Unix() > e.Expiration() {
 			removes = append(removes, key)
-			zap.L().Info(fmt.Sprintf("Ejecting entity %s from cache %s", toJSON(e), t.name))
+			zap.L().Info(fmt.Sprintf("Cache %s: ejecting->%s", t.name, e.JSON()))
+		} else {
+			zap.L().Debug(fmt.Sprintf("Cache %s: preserving->%s", t.name, e.JSON()))
 		}
 	}
 
@@ -122,9 +130,6 @@ func (t *CacheMap) cleanup() {
 		}
 	}
 
-}
+	zap.L().Debug(fmt.Sprintf("Completed cleanup on token cache %s", t.name))
 
-func toJSON(e interface{}) string {
-	j, _ := json.Marshal(e)
-	return string(j)
 }

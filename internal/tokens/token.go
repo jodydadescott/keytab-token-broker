@@ -1,85 +1,57 @@
+/*
+Copyright © 2020 Jody Scott <jody@thescottsweb.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package tokens
 
 import (
-	"fmt"
-	"time"
+	"encoding/json"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/jinzhu/copier"
 )
 
 // Token OAUTH/OIDC Token
 type Token struct {
-	Alg    string                 `json:"alg,omitempty" yaml:"alg,omitempty"`
-	Kid    string                 `json:"kid,omitempty" yaml:"kid,omitempty"`
-	Iss    string                 `json:"iss,omitempty" yaml:"iss,omitempty"`
-	Exp    int64                  `json:"exp,omitempty" yaml:"exp,omitempty"`
-	Aud    string                 `json:"aud,omitempty" yaml:"aud,omitempty"`
-	Claims map[string]interface{} `json:"claims,omitempty" yaml:"claims,omitempty"`
+	TokenString string                 `json:"tokenString,omitempty" yaml:"tokenString,omitempty"`
+	Alg         string                 `json:"alg,omitempty" yaml:"alg,omitempty"`
+	Kid         string                 `json:"kid,omitempty" yaml:"kid,omitempty"`
+	Iss         string                 `json:"iss,omitempty" yaml:"iss,omitempty"`
+	Exp         int64                  `json:"exp,omitempty" yaml:"exp,omitempty"`
+	Aud         string                 `json:"aud,omitempty" yaml:"aud,omitempty"`
+	Claims      map[string]interface{} `json:"claims,omitempty" yaml:"claims,omitempty"`
 }
 
-// TokenFromBase64 ...
-func TokenFromBase64(tokenString string) (*Token, error) {
-
-	token := &Token{}
-	_, err := jwt.Parse(tokenString, func(jwtToken *jwt.Token) (interface{}, error) {
-
-		claims, ok := jwtToken.Claims.(jwt.MapClaims)
-		if !ok {
-			return nil, fmt.Errorf("Token claims have unexpected format")
-		}
-
-		for k, v := range claims {
-
-			if k == "iss" {
-				token.Iss, _ = v.(string)
-			}
-
-			if k == "exp" {
-				floatValue := v.(float64)
-				token.Exp = int64(floatValue)
-			}
-
-			if k == "aud" {
-				token.Aud, _ = v.(string)
-			}
-
-		}
-
-		token.Claims = claims
-		token.Kid = jwtToken.Header["kid"].(string)
-		token.Alg = jwtToken.Header["alg"].(string)
-
-		if token.Exp == 0 {
-			return nil, fmt.Errorf("Expiration(exp) not found")
-		}
-
-		return nil, nil
-
-	})
-
-	if err != nil {
-		if err.Error() == "Token is expired" {
-			return token, nil
-		}
-		if err.Error() == "Token used before issued" {
-			return token, nil
-		}
-
-		if err.Error() == "key is of invalid type" {
-			return token, nil
-		}
-
-		return nil, err
-	}
-
-	return token, nil
-
+// Expiration ...
+func (t *Token) Expiration() int64 {
+	return t.Exp
 }
 
-// Valid Returns true if entity is valid
-func (t *Token) Valid() bool {
-	if t.Exp > 0 && t.Exp > time.Now().Unix() {
-		return true
-	}
-	return false
+// Key ...
+func (t *Token) Key() string {
+	return t.TokenString
+}
+
+// JSON ...
+func (t *Token) JSON() string {
+	j, _ := json.Marshal(t)
+	return string(j)
+}
+
+// Clone return copy
+func (t *Token) Clone() *Token {
+	clone := &Token{}
+	copier.Copy(&clone, &t)
+	return clone
 }

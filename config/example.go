@@ -29,10 +29,11 @@ func v1ExampleConfig() *Config {
 			HTTPSPort: 8443,
 		},
 		Policy: &Policy{
-			Query:          exampleQuery,
-			Policy:         examplePolicy,
-			NonceLifetime:  60,
-			KeytabLifetime: 120,
+			Query:              exampleQuery,
+			Policy:             examplePolicy,
+			NonceLifetime:      60,
+			KeytabSoftLifetime: 120,
+			KeytabHardLifetime: 600,
 		},
 		Logging: &Logging{
 			LogLevel:         "info",

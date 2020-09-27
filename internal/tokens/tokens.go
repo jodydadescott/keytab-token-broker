@@ -1,3 +1,19 @@
+/*
+Copyright © 2020 Jody Scott <jody@thescottsweb.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package tokens
 
 import (
@@ -14,7 +30,6 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/jinzhu/copier"
 	"github.com/jodydadescott/kerberos-bridge/internal/cachemap"
 	"go.uber.org/zap"
 )
@@ -31,39 +46,35 @@ const (
 	defaultPublicKeyRequestTimeout = 60
 	minPublicKeyRequestTimeout     = 5
 	maxPublicKeyRequestTimeout     = 600
+
+	publicKeyLifetime = 86400
 )
 
-// ErrNotFound ...
-var ErrNotFound error = errors.New("Not Found")
+var (
+	// ErrTokenExpired Token not found
+	ErrTokenExpired error = errors.New("Token expired")
+	// ErrTokenInvalid Token not valid
+	ErrTokenInvalid error = errors.New("Token invalid")
+	// ErrPublicKeyInvalid Public ISS Key not found or invalid
+	ErrPublicKeyInvalid error = errors.New("Public key (ISS) not found or invalid")
+)
 
 // Config The config
 type Config struct {
-	CacheRefreshInterval     int `json:"cacheRefreshInterval,omitempty" yaml:"cacheRefreshInterval,omitempty"`
-	PublicKeyRequestTimeout  int `json:"publicKeyRequestTimeout,omitempty" yaml:"publicKeyRequestTimeout,omitempty"`
-	PublicKeyidleConnections int `json:"publicKeyidleConnections,omitempty" yaml:"publicKeyidleConnections,omitempty"`
+	CacheRefreshInterval, PublicKeyRequestTimeout, PublicKeyidleConnections int
 }
 
-// PublicKey ...
-type PublicKey struct {
-	EcdsaPublicKey *ecdsa.PublicKey `json:"-"`
-	Created        int64            `json:"created,omitempty" yaml:"created,omitempty"`
-	Kty            string           `json:"kty,omitempty" yaml:"kty,omitempty"`
-}
-
-// Valid ...
-func (t *PublicKey) Valid() bool {
-	// This needs a true implementation
-	return true
-}
-
-// Cache ...
-type Cache struct {
-	cacheMap   *cachemap.CacheMap
-	httpClient *http.Client
+// TokenCache ...
+type TokenCache struct {
+	tokenCacheMap     *cachemap.CacheMap
+	publickeyCacheMap *cachemap.CacheMap
+	httpClient        *http.Client
 }
 
 // Build Returns a new Token Cache
-func (config *Config) Build() (*Cache, error) {
+func (config *Config) Build() (*TokenCache, error) {
+
+	zap.L().Debug("Starting Token Cache")
 
 	cacheRefreshInterval := defaultCacheRefreshInterval
 	publicKeyRequestTimeout := defaultPublicKeyRequestTimeout
@@ -93,8 +104,29 @@ func (config *Config) Build() (*Cache, error) {
 		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "PublicKeyidleConnections", minPublicKeyidleConnections, maxPublicKeyidleConnections))
 	}
 
-	return &Cache{
-		cacheMap: cachemap.NewCacheMap("token", cacheRefreshInterval),
+	tokenCacheMapConfig := &cachemap.Config{
+		CacheRefreshInterval: cacheRefreshInterval,
+		Name:                 "token",
+	}
+
+	tokenCacheMap, err := tokenCacheMapConfig.Build()
+	if err != nil {
+		return nil, err
+	}
+
+	publickeyCacheMapConfig := &cachemap.Config{
+		CacheRefreshInterval: cacheRefreshInterval,
+		Name:                 "publickey",
+	}
+
+	publickeyCacheMap, err := publickeyCacheMapConfig.Build()
+	if err != nil {
+		return nil, err
+	}
+
+	return &TokenCache{
+		tokenCacheMap:     tokenCacheMap,
+		publickeyCacheMap: publickeyCacheMap,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				MaxIdleConnsPerHost: publicKeyidleConnections,
@@ -106,29 +138,31 @@ func (config *Config) Build() (*Cache, error) {
 }
 
 // GetToken ...
-func (t *Cache) GetToken(token string) (*Token, error) {
+func (t *TokenCache) GetToken(token string) (*Token, error) {
 
 	if token == "" {
-		return nil, fmt.Errorf("Token is empty")
+		zap.L().Warn("request for empty token")
+		return nil, ErrTokenInvalid
 	}
 
 	shortTokenString := token[1:8] + "..."
+	e := t.tokenCacheMap.Get(token)
+	var xtoken *Token
 
-	if e, exist := t.cacheMap.Get(token); exist {
-		xtoken := e.(*Token)
-
-		// Func is exported. Return clone to untrusted outsiders
-		clone := &Token{}
-		err := copier.Copy(&clone, &xtoken)
-		if err != nil {
-			panic(err)
+	if e != nil {
+		xtoken = e.(*Token)
+		// Token may exist but be expired
+		if xtoken.Exp < time.Now().Unix() {
+			zap.L().Debug(fmt.Sprintf("Token exist in cache and is invalid %s", shortTokenString))
+			return nil, ErrTokenExpired
 		}
-		return clone, nil
+		// Func is exported. Return clone to untrusted outsiders
+		return xtoken.Clone(), nil
 	}
 
 	zap.L().Debug(fmt.Sprintf("Token=%s not found in cache", shortTokenString))
 
-	xtoken := &Token{}
+	xtoken = &Token{}
 
 	_, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
 
@@ -201,33 +235,32 @@ func (t *Cache) GetToken(token string) (*Token, error) {
 	})
 
 	if err != nil {
-		if err.Error() == "Token is expired" {
-			// Consume and log
+		if err == ErrPublicKeyInvalid {
+			return nil, ErrPublicKeyInvalid
+		} else if err.Error() == "Token is expired" {
+			// We will be the judge of that
 		} else if err.Error() == "Token used before issued" {
-			// Consume and log
+			// Slight drift in clock. We will be the judge of that
 		} else {
-			return nil, err
+			zap.L().Debug(fmt.Sprintf("%s", err))
+			return nil, ErrTokenInvalid
 		}
 	}
 
-	if xtoken.Valid() {
-		t.cacheMap.Put(token, xtoken)
-		zap.L().Debug(fmt.Sprintf("Token %s added to cache", shortTokenString))
-	} else {
-		zap.L().Debug(fmt.Sprintf("Token %s will not be added to cache; its expired]", shortTokenString))
+	// Token may be expired
+
+	if xtoken.Exp < time.Now().Unix() {
+		zap.L().Debug(fmt.Sprintf("Token not in cache and is invalid %s", shortTokenString))
+		return nil, ErrTokenExpired
 	}
 
-	// Func is exported. Return clone to untrusted outsiders
-	clone := &Token{}
-	err = copier.Copy(&clone, &xtoken)
-	if err != nil {
-		panic(err)
-	}
+	xtoken.TokenString = token
+	t.tokenCacheMap.Put(xtoken)
 
-	return clone, nil
+	return xtoken.Clone(), nil
 }
 
-func (t *Cache) getOpenIDConfiguration(fqdn string) (*openIDConfiguration, error) {
+func (t *TokenCache) getOpenIDConfiguration(fqdn string) (*openIDConfiguration, error) {
 
 	resp, err := t.httpClient.Get(fqdn)
 	if err != nil {
@@ -244,7 +277,7 @@ func (t *Cache) getOpenIDConfiguration(fqdn string) (*openIDConfiguration, error
 	return openIDConfigurationFromJSON(b)
 }
 
-func (t *Cache) getJWKs(fqdn string) (*jwks, error) {
+func (t *TokenCache) getJWKs(fqdn string) (*jwks, error) {
 
 	resp, err := t.httpClient.Get(fqdn)
 	if err != nil {
@@ -266,14 +299,13 @@ func (t *Cache) getJWKs(fqdn string) (*jwks, error) {
 	return &result, nil
 }
 
-func (t *Cache) getKey(iss, kid string) (*PublicKey, error) {
+func (t *TokenCache) getKey(iss, kid string) (*PublicKey, error) {
 
 	issKid := iss + ":" + kid
 
-	if e, exist := t.cacheMap.Get(issKid); exist {
-
+	e := t.publickeyCacheMap.Get(issKid)
+	if e != nil {
 		publicKey := e.(*PublicKey)
-
 		return publicKey, nil
 	}
 
@@ -291,7 +323,8 @@ func (t *Cache) getKey(iss, kid string) (*PublicKey, error) {
 					if jwk.Kid == kid {
 						key, err := newKey(&jwk)
 						if err == nil {
-							t.cacheMap.Put(issKid, key)
+							key.Iss = iss
+							t.publickeyCacheMap.Put(key)
 							zap.L().Debug(fmt.Sprintf("key for iss %s and kid %s created and added to cache", iss, kid))
 							return key, nil
 						}
@@ -307,7 +340,7 @@ func (t *Cache) getKey(iss, kid string) (*PublicKey, error) {
 
 	}
 
-	return nil, ErrNotFound
+	return nil, ErrPublicKeyInvalid
 }
 
 type openIDConfiguration []struct {
@@ -428,13 +461,15 @@ func newKeyEC(jwk *jwk) (*PublicKey, error) {
 			X:     new(big.Int).SetBytes(byteX),
 			Y:     new(big.Int).SetBytes(byteY),
 		},
-		Created: time.Now().Unix(),
-		Kty:     jwk.Kty,
+		Exp: time.Now().Unix() + int64(publicKeyLifetime),
+		Kty: jwk.Kty,
+		Kid: jwk.Kid,
 	}, nil
 
 }
 
 // Shutdown Cache
-func (t *Cache) Shutdown() {
-	t.cacheMap.Shutdown()
+func (t *TokenCache) Shutdown() {
+	t.tokenCacheMap.Shutdown()
+	t.publickeyCacheMap.Shutdown()
 }

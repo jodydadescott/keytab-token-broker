@@ -186,17 +186,27 @@ var serverCmd = &cobra.Command{
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		config, err := configloader.GetConfigs()
+		var err error
+		var configLoader *configloader.ConfigLoader
+
+		if viper.GetString("config") == "" {
+			configLoader, err = configloader.NewConfigLoader()
+			if err != nil {
+				return err
+			}
+		} else {
+			configLoader, err = configloader.NewConfigLoaderFromFileOrURL(viper.GetString("config"))
+			if err != nil {
+				return err
+			}
+		}
+
+		serverConfig, err := configLoader.ServerConfig()
 		if err != nil {
 			return err
 		}
 
-		serverConfig, err := config.ServerConfig()
-		if err != nil {
-			return err
-		}
-
-		zapConfig, err := config.ZapConfig()
+		zapConfig, err := configLoader.ZapConfig()
 		if err != nil {
 			return err
 		}
@@ -211,15 +221,18 @@ var serverCmd = &cobra.Command{
 
 		// 	//fmt.Println(fmt.Sprintf("Config:%s", config.JSON()))
 
+		sig := make(chan os.Signal, 2)
+		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+
 		server, err := serverConfig.Build()
 		if err != nil {
 			return err
 		}
 
-		sig := make(chan os.Signal, 2)
-		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+		zap.L().Debug("Started successfully")
 		<-sig
 
+		zap.L().Debug("Shutting down on signal")
 		server.Shutdown()
 
 		return nil
@@ -253,11 +266,12 @@ func init() {
 
 	if runtime.GOOS == "windows" {
 		serviceCmd.AddCommand(serviceInstallCmd, serviceRemoveCmd, serviceStartCmd, serviceStopCmd, servicePauseCmd, serviceContinueCmd)
-		rootCmd.AddCommand(serviceCmd)
+		configCmd.AddCommand(configSetCmd, configShowCmd, configExampleCmd)
+		rootCmd.AddCommand(serviceCmd, configCmd, serverCmd)
+	} else {
+		configCmd.AddCommand(configExampleCmd)
+		rootCmd.AddCommand(configCmd, serverCmd)
 	}
-
-	configCmd.AddCommand(configSetCmd, configShowCmd, configExampleCmd)
-	rootCmd.AddCommand(configCmd, serverCmd)
 
 	configExampleCmd.PersistentFlags().StringP("format", "", "", "output format in yaml or json; default is yaml")
 	viper.BindPFlag("format", configExampleCmd.PersistentFlags().Lookup("format"))
