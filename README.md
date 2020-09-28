@@ -28,17 +28,15 @@ KTB is designed to run on Windows. It uses the utility C:/Windows/System32/ktpas
 ## Example(s)
 
 ### Example Client
-[Example Client Script](example/client/scripts/kinit_client.bash)
+[Example Client kinit wrapper](example/client/scripts/kinit_client.bash)
 
 ## Installation
-1. Create the directory C:\Program Files\KTBServer
-1. Download the ktbserver.exe binary to C:\Program Files\KTBServer/ktbserver.exe
-1. Create and edit the configuration.
+1. Download the ktbserver.exe binary to the Windows filesystem.
+1. Create and edit the configuration. Use the command `.\ktbserver.exe config example > ktbserver.conf` to create an example.
 1. Edit the configuration and place it somewhere on the local disk or in a Git Repo
-1. Set the config location with the command `C:\Program Files\KTBServer/ktbserver.exe config set LOCATION`. LOCATION can be a URL or local file.
-1. Install the
-Download the ktbserver.exe binary to a Windows domain controller or member. 
-
-`C:\Program Files\KTBServer/ktbserver.exe config example > ktbserver.conf`
+1. Set the config location with `C:\Program Files\KTBServer/ktbserver.exe config set LOC` where LOC is the URL or filename of the config
+1. Install as a Windows service with `.\ktbserver.exe service install`
+1. Configure the service to run as a Domain Admin. If you dont do this it will NOT be able to create Keytabs.
+1. Start the service with `.\ktbserver.exe service start` or use the Windows Service utility
 
 

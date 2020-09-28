@@ -1,5 +1,5 @@
 #!/bin/bash
 
 make windows || exit $?
-scp dist/kbridge.exe jody@x1:_kbridge.exe
-ssh -q -t jody@x1 "mv _kbridge.exe kbridge.exe"
+scp dist/ktbserver-windows-amd64.exe jody@x1:_ktbserver-windows-amd64.exe
+ssh -q -t jody@x1 "mv _ktbserver-windows-amd64.exe ktbserver-windows-amd64.exe"

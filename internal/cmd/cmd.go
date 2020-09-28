@@ -180,6 +180,63 @@ var configExampleCmd = &cobra.Command{
 	},
 }
 
+var runDebugCmd = &cobra.Command{
+	Use:   "run-debug",
+	Short: "run debug (non service)",
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+
+		var err error
+		var configLoader *configloader.ConfigLoader
+
+		if viper.GetString("config") == "" {
+			configLoader, err = configloader.NewConfigLoader()
+			if err != nil {
+				return err
+			}
+		} else {
+			configLoader, err = configloader.NewConfigLoaderFromFileOrURL(viper.GetString("config"))
+			if err != nil {
+				return err
+			}
+		}
+
+		serverConfig, err := configLoader.ServerConfig()
+		if err != nil {
+			return err
+		}
+
+		zapConfig, err := configLoader.ZapConfig()
+		if err != nil {
+			return err
+		}
+
+		logger, err := zapConfig.Build()
+		if err != nil {
+			return err
+		}
+
+		zap.ReplaceGlobals(logger)
+		//defer logger.Sync()
+
+		sig := make(chan os.Signal, 2)
+		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+
+		server, err := serverConfig.Build()
+		if err != nil {
+			return err
+		}
+
+		zap.L().Debug("Started successfully")
+		<-sig
+
+		zap.L().Debug("Shutting down on signal")
+		server.Shutdown()
+
+		return nil
+	},
+}
+
 var serverCmd = &cobra.Command{
 	Use:   "start",
 	Short: "start server",
@@ -218,8 +275,6 @@ var serverCmd = &cobra.Command{
 
 		zap.ReplaceGlobals(logger)
 		//defer logger.Sync()
-
-		// 	//fmt.Println(fmt.Sprintf("Config:%s", config.JSON()))
 
 		sig := make(chan os.Signal, 2)
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -267,7 +322,7 @@ func init() {
 	if runtime.GOOS == "windows" {
 		serviceCmd.AddCommand(serviceInstallCmd, serviceRemoveCmd, serviceStartCmd, serviceStopCmd, servicePauseCmd, serviceContinueCmd)
 		configCmd.AddCommand(configSetCmd, configShowCmd, configExampleCmd)
-		rootCmd.AddCommand(serviceCmd, configCmd, serverCmd)
+		rootCmd.AddCommand(serviceCmd, configCmd, runDebugCmd)
 	} else {
 		configCmd.AddCommand(configExampleCmd)
 		rootCmd.AddCommand(configCmd, serverCmd)

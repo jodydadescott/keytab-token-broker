@@ -94,23 +94,6 @@
   revision = "b57f9002281ac48ed8cbc489b1e91121e1a0824c"
 
 [[projects]]
-  branch = "master"
-  digest = "1:91109d63b91c6b6ae8cbec235c0acdb82bf7c6658cb6d0a7dade654eabed0ad9"
-  name = "github.com/jodydadescott/kerberos-bridge"
-  packages = [
-    "config",
-    "internal/cachemap",
-    "internal/cmd",
-    "internal/configloader",
-    "internal/keytabs",
-    "internal/nonces",
-    "internal/server",
-    "internal/tokens",
-  ]
-  pruneopts = ""
-  revision = "275936decc0fb9518d77940ca15d23c4ab5d6162"
-
-[[projects]]
   digest = "1:d1ad808503cf5ff1086afc95f3f6938fa604125d53391562752824750a6ba1aa"
   name = "github.com/magiconair/properties"
   packages = ["."]
@@ -435,14 +418,6 @@
   input-imports = [
     "github.com/dgrijalva/jwt-go",
     "github.com/jinzhu/copier",
-    "github.com/jodydadescott/kerberos-bridge/config",
-    "github.com/jodydadescott/kerberos-bridge/internal/cachemap",
-    "github.com/jodydadescott/kerberos-bridge/internal/cmd",
-    "github.com/jodydadescott/kerberos-bridge/internal/configloader",
-    "github.com/jodydadescott/kerberos-bridge/internal/keytabs",
-    "github.com/jodydadescott/kerberos-bridge/internal/nonces",
-    "github.com/jodydadescott/kerberos-bridge/internal/server",
-    "github.com/jodydadescott/kerberos-bridge/internal/tokens",
     "github.com/mitchellh/go-homedir",
     "github.com/open-policy-agent/opa/rego",
     "github.com/spf13/cobra",
