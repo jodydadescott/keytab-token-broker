@@ -30,10 +30,10 @@ KTB is designed to run on Windows. It uses the utility C:/Windows/System32/ktpas
 ### Example Client
 [Example Client Script](example/client/scripts/kinit_client.bash)
 
-## Installation -- WORK Needed
+## Installation
 1. Create the directory C:\Program Files\KTBServer
 1. Download the ktbserver.exe binary to C:\Program Files\KTBServer/ktbserver.exe
-1. Create and edit the configuration. 
+1. Create and edit the configuration.
 1. Edit the configuration and place it somewhere on the local disk or in a Git Repo
 1. Set the config location with the command `C:\Program Files\KTBServer/ktbserver.exe config set LOCATION`. LOCATION can be a URL or local file.
 1. Install the
