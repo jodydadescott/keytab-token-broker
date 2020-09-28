@@ -28,7 +28,7 @@ KTB is designed to run on Windows. It uses the utility C:/Windows/System32/ktpas
 ## Example(s)
 
 ### Example Client
-[example client | https://github.com/jodydadescott/keytab-token-broker/blob/master/example/client/scripts/kinit_client.bash]
+[https://github.com/jodydadescott/keytab-token-broker/blob/master/example/client/scripts/kinit_client.bash|example client]
 
 ## Installation -- WORK Needed
 1. Create the directory C:\Program Files\KTBServer
