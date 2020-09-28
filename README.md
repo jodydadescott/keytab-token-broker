@@ -25,6 +25,11 @@ Unlike tokens there can only be one valid Keytab at a time. Consider the situati
 ## Notes
 KTB is designed to run on Windows. It uses the utility C:/Windows/System32/ktpass to create Keytabs. For testing purposes KTB may be ran on Linux or Darwin. In this situation only dummy Keytabs will be provided. The base64 will NOT be a valid Keytab file.
 
+## Example(s)
+
+### Example Client
+[example client | https://github.com/jodydadescott/keytab-token-broker/blob/master/example/client/scripts/kinit_client.bash]
+
 ## Installation -- WORK Needed
 1. Create the directory C:\Program Files\KTBServer
 1. Download the ktbserver.exe binary to C:\Program Files\KTBServer/ktbserver.exe
