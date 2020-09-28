@@ -1,0 +1,5 @@
+#!/bin/bash
+
+make windows || exit $?
+scp dist/kbridge.exe jody@x1:_kbridge.exe
+ssh -q -t jody@x1 "mv _kbridge.exe kbridge.exe"

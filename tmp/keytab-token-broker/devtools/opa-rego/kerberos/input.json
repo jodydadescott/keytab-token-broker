@@ -1,0 +1,19 @@
+{
+  "alg": "ES256",
+  "kid": "5e3dc5cab1568c0001e7c2c1",
+  "iss": "https://api.console.aporeto.com/v/1/namespaces/5ddc396b9facec0001d3c886/oauthinfo",
+  "exp": 1600209145,
+  "aud": "IVuLulPHF5zgDKwcJU8VuV73r5dgKCTYKM5gTpikMCPL77jmYK9CZ3WjxaE0s1BE",
+  "claims": {
+    "aud": "IVuLulPHF5zgDKwcJU8VuV73r5dgKCTYKM5gTpikMCPL77jmYK9CZ3WjxaE0s1BE",
+    "exp": 1600209145,
+    "iat": 1600205545,
+    "iss": "https://api.console.aporeto.com/v/1/namespaces/5ddc396b9facec0001d3c886/oauthinfo",
+    "service": {
+      "@cloud:aws:ami-id": "ami-0a54aef4ef3b5f881",
+      "ilove": "the80s",
+      "keytab": "superman@EXAMPLE.COM"
+    },
+    "sub": "5f6132e93925290001f1971b"
+  }
+}
