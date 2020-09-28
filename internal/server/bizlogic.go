@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jodydadescott/kerberos-bridge/internal/keytabs"
-	"github.com/jodydadescott/kerberos-bridge/internal/nonces"
+	"github.com/jodydadescott/keytab-token-broker/internal/keytabs"
+	"github.com/jodydadescott/keytab-token-broker/internal/nonces"
 	"go.uber.org/zap"
 )
 

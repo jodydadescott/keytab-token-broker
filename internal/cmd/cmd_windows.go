@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jodydadescott/kerberos-bridge/internal/configloader"
+	"github.com/jodydadescott/keytab-token-broker/internal/configloader"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sys/windows/svc"

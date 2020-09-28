@@ -15,7 +15,7 @@ limitations under the License.
 */
 package main
 
-import "github.com/jodydadescott/kerberos-bridge/internal/cmd"
+import "github.com/jodydadescott/keytab-token-broker/internal/cmd"
 
 func main() {
 	cmd.Execute()

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/jodydadescott/kerberos-bridge/config"
-	"github.com/jodydadescott/kerberos-bridge/internal/configloader"
+	"github.com/jodydadescott/keytab-token-broker/config"
+	"github.com/jodydadescott/keytab-token-broker/internal/configloader"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"

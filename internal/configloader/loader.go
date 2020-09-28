@@ -27,8 +27,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jodydadescott/kerberos-bridge/config"
-	"github.com/jodydadescott/kerberos-bridge/internal/server"
+	"github.com/jodydadescott/keytab-token-broker/config"
+	"github.com/jodydadescott/keytab-token-broker/internal/server"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v2"

@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/jodydadescott/kerberos-bridge/internal/cachemap"
+	"github.com/jodydadescott/keytab-token-broker/internal/cachemap"
 	"go.uber.org/zap"
 )
 

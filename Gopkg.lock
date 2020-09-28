@@ -94,12 +94,37 @@
   revision = "b57f9002281ac48ed8cbc489b1e91121e1a0824c"
 
 [[projects]]
+  branch = "master"
+  digest = "1:91109d63b91c6b6ae8cbec235c0acdb82bf7c6658cb6d0a7dade654eabed0ad9"
+  name = "github.com/jodydadescott/kerberos-bridge"
+  packages = [
+    "config",
+    "internal/cachemap",
+    "internal/cmd",
+    "internal/configloader",
+    "internal/keytabs",
+    "internal/nonces",
+    "internal/server",
+    "internal/tokens",
+  ]
+  pruneopts = ""
+  revision = "275936decc0fb9518d77940ca15d23c4ab5d6162"
+
+[[projects]]
   digest = "1:d1ad808503cf5ff1086afc95f3f6938fa604125d53391562752824750a6ba1aa"
   name = "github.com/magiconair/properties"
   packages = ["."]
   pruneopts = ""
   revision = "e55ec40311b90df900426eae806bb80a40154583"
   version = "v1.8.3"
+
+[[projects]]
+  digest = "1:6dbb0eb72090871f2e58d1e37973fe3cb8c0f45f49459398d3fc740cb30e13bd"
+  name = "github.com/mitchellh/go-homedir"
+  packages = ["."]
+  pruneopts = ""
+  revision = "af06845cf3004701891bf4fdb884bfe4920b3727"
+  version = "v1.1.0"
 
 [[projects]]
   digest = "1:8871abddc1a4e30c0356055f65a3909a73b8847ca1e97e286a9ff7f5df8b92a2"
@@ -310,6 +335,10 @@
     "unix",
     "windows",
     "windows/registry",
+    "windows/svc",
+    "windows/svc/debug",
+    "windows/svc/eventlog",
+    "windows/svc/mgr",
   ]
   pruneopts = ""
   revision = "efd3b9a0ff205c921c51961c1c9bb8728bd0ce1b"
@@ -406,12 +435,25 @@
   input-imports = [
     "github.com/dgrijalva/jwt-go",
     "github.com/jinzhu/copier",
+    "github.com/jodydadescott/kerberos-bridge/config",
+    "github.com/jodydadescott/kerberos-bridge/internal/cachemap",
+    "github.com/jodydadescott/kerberos-bridge/internal/cmd",
+    "github.com/jodydadescott/kerberos-bridge/internal/configloader",
+    "github.com/jodydadescott/kerberos-bridge/internal/keytabs",
+    "github.com/jodydadescott/kerberos-bridge/internal/nonces",
+    "github.com/jodydadescott/kerberos-bridge/internal/server",
+    "github.com/jodydadescott/kerberos-bridge/internal/tokens",
+    "github.com/mitchellh/go-homedir",
     "github.com/open-policy-agent/opa/rego",
     "github.com/spf13/cobra",
     "github.com/spf13/viper",
     "go.uber.org/zap",
     "go.uber.org/zap/zapcore",
     "golang.org/x/sys/windows/registry",
+    "golang.org/x/sys/windows/svc",
+    "golang.org/x/sys/windows/svc/debug",
+    "golang.org/x/sys/windows/svc/eventlog",
+    "golang.org/x/sys/windows/svc/mgr",
     "gopkg.in/yaml.v2",
   ]
   solver-name = "gps-cdcl"

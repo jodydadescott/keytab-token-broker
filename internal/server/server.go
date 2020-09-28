@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jodydadescott/kerberos-bridge/internal/keytabs"
-	"github.com/jodydadescott/kerberos-bridge/internal/nonces"
-	"github.com/jodydadescott/kerberos-bridge/internal/tokens"
+	"github.com/jodydadescott/keytab-token-broker/internal/keytabs"
+	"github.com/jodydadescott/keytab-token-broker/internal/nonces"
+	"github.com/jodydadescott/keytab-token-broker/internal/tokens"
 	"go.uber.org/zap"
 )
 
