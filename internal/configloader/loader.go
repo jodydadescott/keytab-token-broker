@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/jodydadescott/keytab-token-broker/config"
-	"github.com/jodydadescott/keytab-token-broker/internal/server"
+	"github.com/jodydadescott/keytab-token-broker/internal/app"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v2"
@@ -41,31 +41,31 @@ const (
 
 // ConfigLoader Config
 type ConfigLoader struct {
-	config *config.Config
+	Config *config.Config
 }
 
 // ServerConfig Returns Server Config
-func (t *ConfigLoader) ServerConfig() (*server.Config, error) {
+func (t *ConfigLoader) ServerConfig() (*app.Config, error) {
 
-	serverConfig := server.NewConfig()
+	serverConfig := app.NewConfig()
 
-	if t.config.Network != nil {
-		serverConfig.Listen = t.config.Network.Listen
-		serverConfig.HTTPPort = t.config.Network.HTTPPort
-		serverConfig.HTTPSPort = t.config.Network.HTTPSPort
+	if t.Config.Network != nil {
+		serverConfig.Listen = t.Config.Network.Listen
+		serverConfig.HTTPPort = t.Config.Network.HTTPPort
+		serverConfig.HTTPSPort = t.Config.Network.HTTPSPort
 	}
 
-	if t.config.Policy != nil {
-		serverConfig.Query = t.config.Policy.Query
-		serverConfig.Policy = t.config.Policy.Policy
-		serverConfig.Nonce.Lifetime = t.config.Policy.NonceLifetime
-		serverConfig.Keytab.SoftLifetime = t.config.Policy.KeytabSoftLifetime
-		serverConfig.Keytab.HardLifetime = t.config.Policy.KeytabHardLifetime
+	if t.Config.Policy != nil {
+		serverConfig.Query = t.Config.Policy.Query
+		serverConfig.Policy = t.Config.Policy.Policy
+		serverConfig.Nonce.Lifetime = t.Config.Policy.NonceLifetime
+		serverConfig.Keytab.SoftLifetime = t.Config.Policy.KeytabSoftLifetime
+		serverConfig.Keytab.HardLifetime = t.Config.Policy.KeytabHardLifetime
 	}
 
-	if t.config.Data != nil {
-		if t.config.Data.KeytabPrincipals != nil {
-			for _, s := range t.config.Data.KeytabPrincipals {
+	if t.Config.Data != nil {
+		if t.Config.Data.KeytabPrincipals != nil {
+			for _, s := range t.Config.Data.KeytabPrincipals {
 				serverConfig.Keytab.Principals = append(serverConfig.Keytab.Principals, s)
 			}
 		}
@@ -86,9 +86,9 @@ func (t *ConfigLoader) ZapConfig() (*zap.Config, error) {
 		EncoderConfig: zap.NewProductionEncoderConfig(),
 	}
 
-	if t.config.Logging != nil {
+	if t.Config.Logging != nil {
 
-		switch t.config.Logging.LogLevel {
+		switch t.Config.Logging.LogLevel {
 
 		case "debug":
 			zapConfig.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
@@ -113,7 +113,7 @@ func (t *ConfigLoader) ZapConfig() (*zap.Config, error) {
 			return nil, fmt.Errorf("logging level must be debug, info (default), warn or error")
 		}
 
-		switch t.config.Logging.LogFormat {
+		switch t.Config.Logging.LogFormat {
 
 		case "json":
 			zapConfig.Encoding = "json"
@@ -132,18 +132,18 @@ func (t *ConfigLoader) ZapConfig() (*zap.Config, error) {
 
 		}
 
-		if t.config.Logging.OutputPaths == nil || len(t.config.Logging.OutputPaths) <= 0 {
+		if t.Config.Logging.OutputPaths == nil || len(t.Config.Logging.OutputPaths) <= 0 {
 			zapConfig.OutputPaths = append(zapConfig.OutputPaths, "stderr")
 		} else {
-			for _, s := range t.config.Logging.OutputPaths {
+			for _, s := range t.Config.Logging.OutputPaths {
 				zapConfig.OutputPaths = append(zapConfig.OutputPaths, s)
 			}
 		}
 
-		if t.config.Logging.ErrorOutputPaths == nil || len(t.config.Logging.ErrorOutputPaths) <= 0 {
+		if t.Config.Logging.ErrorOutputPaths == nil || len(t.Config.Logging.ErrorOutputPaths) <= 0 {
 			zapConfig.ErrorOutputPaths = append(zapConfig.ErrorOutputPaths, "stderr")
 		} else {
-			for _, s := range t.config.Logging.ErrorOutputPaths {
+			for _, s := range t.Config.Logging.ErrorOutputPaths {
 				zapConfig.ErrorOutputPaths = append(zapConfig.ErrorOutputPaths, s)
 			}
 		}
@@ -184,7 +184,7 @@ func NewConfigLoaderFromBytes(input []byte) (*ConfigLoader, error) {
 	}
 
 	return &ConfigLoader{
-		config: config,
+		Config: config,
 	}, nil
 
 }

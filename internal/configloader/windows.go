@@ -22,7 +22,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-var keyRegistryPath = `SOFTWARE\KerberosBridge`
+var keyRegistryPath = `SOFTWARE\KTBServer`
 
 // GetRuntimeConfigString ...
 func GetRuntimeConfigString() (string, error) {

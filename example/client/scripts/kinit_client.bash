@@ -56,6 +56,7 @@ function main() {
   err "Getting keytab with token"
   keytab=$(httpGet "${KEYTAB_SERVER}"/getkeytab\?bearertoken="${token}"\&principal="${PRINCIPAL}") || {
     err "Failed to get keytab"
+    err "Check you settings and also make sure that the server is running as a Domain Admin"
     return 3
   }
 

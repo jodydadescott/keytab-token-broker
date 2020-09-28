@@ -1,6 +1,18 @@
-// Copyright 2012 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright © 2020 Jody Scott <jody@thescottsweb.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 // +build windows
 
@@ -21,12 +33,8 @@ import (
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-const enableDebug = true
-
-// const enableDebug = false
-
-const svcName = "kbridge"
-const svcDesc = "Kerberos Bridge"
+const svcName = "KTBServer"
+const svcDesc = "Keytab Token Broker Server"
 
 var elog debug.Log
 
@@ -118,15 +126,6 @@ func isAnInteractiveSession() (bool, error) {
 
 func runService() {
 	var err error
-
-	// if isDebug {
-	// 	elog = debug.New(svcName)
-	// } else {
-	// 	elog, err = eventlog.Open(svcName)
-	// 	if err != nil {
-	// 		return
-	// 	}
-	// }
 
 	elog, err = eventlog.Open(svcName)
 	defer elog.Close()
@@ -325,9 +324,7 @@ func getZapHook() func(zapcore.Entry) error {
 		switch e.Level {
 
 		case zapcore.DebugLevel:
-			if enableDebug {
-				elog.Info(1, e.Message)
-			}
+			//	elog.Info(1, e.Message)
 			break
 
 		case zapcore.InfoLevel:
