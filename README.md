@@ -27,17 +27,62 @@ The reason we do not issue TGT tickets is that it is difficult to install these 
 ## Notes
 1. KTB is designed to run on Windows. It will run on Linux and Darwin but it will create dummy keytabs. This may be useful for testing functionality.
 1. It uses the utility C:/Windows/System32/ktpass to create Keytabs.
- 
+
+## Installation and Configuration
+
+### Installation
+1. Create a directory `mkdir C:\Program Files\KTBServer`
+1. Download the ktbserver-windows-amd64.exe binary and place in the newly created directory
+1. Create an example configuration with the command `.\ktbserver-windows-amd64.exe config example > config.yaml`
+1. Install as a Windows service with `.\ktbserver.exe service install`
+1. Configure the service to run as a Domain Admin. If you don’t do this it will NOT be able to create Keytabs.
+1. Start the service with `.\ktbserver-windows-amd64.exe service start` or use the Windows Service utility
+
+## Building the configuration (OPA / Rego)
+Authorization is done with OPA. You will want to write a custom policy. This is the example one found in the example configuration.
+```
+package kbridge
+
+default grant_new_nonce = false
+grant_new_nonce {
+	input.iss == "https://api.console.aporeto.com/v/1/namespaces/5ddc396b9facec0001d3c886/oauthinfo"
+}
+get_principals[grant] {
+	grant := split(input.claims.service.keytab,",")
+}
+```
+Save your config and name it policy.rego. Then create an input configuration file with the name input.yaml similiar to this.
+```
+apiVersion: V1
+network:
+  Listen: any
+  httpPort: 8080
+  httpsPort: 8443
+policy:
+  # query: grant_new_nonce = data.kbridge.grant_new_nonce; data.kbridge.get_principals[get_principals]
+  query: {your query goes here}
+  nonceLifetime: 60
+  keytabSoftLifetime: 120
+  keytabHardLifetime: 600
+logging:
+  logLevel: info
+  logFormat: json
+  outputPaths:
+  - stderr
+  errorOutputPaths:
+  - stderr
+data:
+  principals:
+  - user1@EXAMPLE.COM
+  - user2@EXAMPLE.COM
+```
+Be sure to update the OPA/Rego query with your query and your users. Then use the command below to build a single configuration file
+```
+.\ktbserver-windows-amd64.exe config make --config input.yaml,policy.rego > config.yaml
+```
+Note that configuration files are processed in order and that subsequent configurations will overwrite existing settings if the attribute is set.
+
 ## Example(s)
  
 ### Example Client
 [Example Client kinit wrapper](example/client/scripts/kinit_client.bash)
- 
-## Installation
-1. Download the ktbserver.exe binary to the Windows filesystem.
-1. Create and edit the configuration. Use the command `.\ktbserver.exe config example > ktbserver.conf` to create an example.
-1. Edit the configuration and place it somewhere on the local disk or in a Git Repo
-1. Set the config location with `C:\Program Files\KTBServer/ktbserver.exe config set LOC` where LOC is the URL or filename of the config
-1. Install as a Windows service with `.\ktbserver.exe service install`
-1. Configure the service to run as a Domain Admin. If you don’t do this it will NOT be able to create Keytabs.
-1. Start the service with `.\ktbserver.exe service start` or use the Windows Service utility

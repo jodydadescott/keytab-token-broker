@@ -10,13 +10,13 @@ import (
 )
 
 type policyConfig struct {
-	Query  string `json:"query,omitempty" yaml:"query,omitempty"`
-	Policy string `json:"policy,omitempty" yaml:"policy,omitempty"`
+	Query  string
+	Policy string
 }
 
 type policyDecision struct {
-	GetNonce   bool     `json:"getNonce,omitempty" yaml:"getNonce,omitempty"`
-	Principals []string `json:"principals,omitempty" yaml:"principals,omitempty"`
+	GetNonce   bool
+	Principals []string
 }
 
 type policy struct {

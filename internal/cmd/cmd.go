@@ -19,7 +19,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"runtime"
@@ -160,41 +159,71 @@ var configShowCmd = &cobra.Command{
 
 var configExampleCmd = &cobra.Command{
 	Use:   "example",
-	Short: "create example configuration",
-
+	Short: "example configuration",
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		outputFileOrDev := "stdout"
-
-		if len(args) > 0 {
-			outputFileOrDev = args[0]
-		}
+		newConfig := config.NewV1ExampleConfig()
 
 		configString := ""
 		switch strings.ToLower(viper.GetString("format")) {
 
-		case "yaml":
-			configString = config.ExampleConfigYAML()
+		case "", "yaml":
+			configString = newConfig.YAML()
 			break
 
 		case "json":
-			configString = config.ExampleConfigJSON()
-			break
-
-		case "":
-			configString = config.ExampleConfigYAML()
+			configString = newConfig.JSON()
 			break
 
 		default:
 			return fmt.Errorf(fmt.Sprintf("Output format %s is unknown. Must be yaml or json", viper.GetString("format")))
 		}
 
-		if outputFileOrDev == "stdout" {
-			fmt.Print(configString)
-			return nil
+		fmt.Print(configString)
+		return nil
+
+	},
+}
+
+var configMakeCmd = &cobra.Command{
+	Use:   "make",
+	Short: "make configuration",
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+
+		//example config policy query
+
+		var err error
+		configLoader := configloader.NewConfigLoader()
+
+		// Input config can be zero, one or many
+		if viper.GetString("config") != "" {
+			for _, s := range strings.Split(viper.GetString("config"), ",") {
+				err = configLoader.LoadFromFileOrURL(s)
+				if err != nil {
+					return err
+				}
+			}
 		}
 
-		return ioutil.WriteFile(outputFileOrDev, []byte(configString), 0644)
+		configString := ""
+		switch strings.ToLower(viper.GetString("format")) {
+
+		case "", "yaml":
+			configString = configLoader.Config.YAML()
+			break
+
+		case "json":
+			configString = configLoader.Config.JSON()
+			break
+
+		default:
+			return fmt.Errorf(fmt.Sprintf("Output format %s is unknown. Must be yaml or json", viper.GetString("format")))
+		}
+
+		fmt.Print(configString)
+		return nil
+
 	},
 }
 
@@ -205,18 +234,16 @@ var runDebugCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		var err error
-		var configLoader *configloader.ConfigLoader
+		configLoader := configloader.NewConfigLoader()
 
 		if viper.GetString("config") == "" {
-			configLoader, err = configloader.NewConfigLoader()
-			if err != nil {
-				return err
-			}
+			err = configLoader.LoadFromLocal()
 		} else {
-			configLoader, err = configloader.NewConfigLoaderFromFileOrURL(viper.GetString("config"))
-			if err != nil {
-				return err
-			}
+			err = configLoader.LoadFromFileOrURL(viper.GetString("config"))
+		}
+
+		if err != nil {
+			return err
 		}
 
 		// Override debug level
@@ -265,18 +292,16 @@ var serverCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		var err error
-		var configLoader *configloader.ConfigLoader
+		configLoader := configloader.NewConfigLoader()
 
 		if viper.GetString("config") == "" {
-			configLoader, err = configloader.NewConfigLoader()
-			if err != nil {
-				return err
-			}
+			err = configLoader.LoadFromLocal()
 		} else {
-			configLoader, err = configloader.NewConfigLoaderFromFileOrURL(viper.GetString("config"))
-			if err != nil {
-				return err
-			}
+			err = configLoader.LoadFromFileOrURL(viper.GetString("config"))
+		}
+
+		if err != nil {
+			return err
 		}
 
 		serverConfig, err := configLoader.ServerConfig()
@@ -342,16 +367,23 @@ func init() {
 
 	if runtime.GOOS == "windows" {
 		serviceCmd.AddCommand(serviceInstallCmd, serviceRemoveCmd, serviceStartCmd, serviceStopCmd, servicePauseCmd, serviceContinueCmd)
-		configCmd.AddCommand(configSetCmd, configShowCmd, configExampleCmd)
+		configCmd.AddCommand(configSetCmd, configShowCmd, configMakeCmd, configExampleCmd)
 		rootCmd.AddCommand(serviceCmd, configCmd, runDebugCmd)
 	} else {
-		configCmd.AddCommand(configExampleCmd)
+		configCmd.AddCommand(configMakeCmd, configExampleCmd)
 		rootCmd.AddCommand(configCmd, serverCmd)
 	}
 
-	configExampleCmd.PersistentFlags().StringP("format", "", "", "output format in yaml or json; default is yaml")
-	viper.BindPFlag("format", configExampleCmd.PersistentFlags().Lookup("format"))
+	// Server
 
 	serverCmd.PersistentFlags().StringP("config", "", "", "configuration file")
 	viper.BindPFlag("config", serverCmd.PersistentFlags().Lookup("config"))
+
+	// Config
+	configMakeCmd.PersistentFlags().StringP("format", "", "", "output format in yaml or json; default is yaml")
+	viper.BindPFlag("format", configMakeCmd.PersistentFlags().Lookup("format"))
+
+	configMakeCmd.PersistentFlags().StringP("config", "", "", "input configuration file(s) (multiple use comma)")
+	viper.BindPFlag("config", configMakeCmd.PersistentFlags().Lookup("config"))
+
 }

@@ -32,13 +32,13 @@ type Keytab struct {
 	HardExp    int64  `json:"hardExp,omitempty" yaml:"hardExp,omitempty"`
 }
 
-// JSON ...
+// JSON Return JSON String representation
 func (t *Keytab) JSON() string {
 	j, _ := json.Marshal(t)
 	return string(j)
 }
 
-// Clone return copy
+// Clone return copy of entity
 func (t *Keytab) Clone() *Keytab {
 	clone := &Keytab{}
 	copier.Copy(&clone, &t)

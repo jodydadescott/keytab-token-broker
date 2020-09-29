@@ -20,7 +20,8 @@ get_principals[grant] {
 }
 `
 
-func v1ExampleConfig() *Config {
+// NewV1ExampleConfig New example config
+func NewV1ExampleConfig() *Config {
 	return &Config{
 		APIVersion: "V1",
 		Network: &Network{
@@ -49,12 +50,12 @@ func v1ExampleConfig() *Config {
 
 // ExampleConfigJSON Return example config as YAML
 func ExampleConfigJSON() string {
-	j, _ := json.Marshal(v1ExampleConfig())
+	j, _ := json.Marshal(NewV1ExampleConfig())
 	return string(j)
 }
 
 // ExampleConfigYAML Return example config as YAML
 func ExampleConfigYAML() string {
-	j, _ := yaml.Marshal(v1ExampleConfig())
+	j, _ := yaml.Marshal(NewV1ExampleConfig())
 	return string(j)
 }

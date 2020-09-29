@@ -54,8 +54,8 @@ func installService() error {
 		return fmt.Errorf("service %s already exists", svcName)
 	}
 	// Jody
-	// s, err = m.CreateService(svcName, exepath, mgr.Config{DisplayName: svcDesc}, "is", "auto-started")
-	s, err = m.CreateService(svcName, exepath, mgr.Config{DisplayName: svcDesc})
+	s, err = m.CreateService(svcName, exepath, mgr.Config{DisplayName: svcDesc}, "is", "auto-started")
+	//	s, err = m.CreateService(svcName, exepath, mgr.Config{DisplayName: svcDesc})
 	if err != nil {
 		return err
 	}
@@ -230,11 +230,16 @@ func (m *myservice) Execute(args []string, r <-chan svc.ChangeRequest, changes c
 	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown | svc.AcceptPauseAndContinue
 	changes <- svc.Status{State: svc.StartPending}
 
+	var err error
+
 	fasttick := time.Tick(10 * time.Second)
 	slowtick := time.Tick(60 * time.Second)
 	tick := fasttick
 
-	configLoader, err := configloader.NewConfigLoader()
+	configLoader := configloader.NewConfigLoader()
+
+	err = configLoader.LoadFromLocal()
+
 	if err != nil {
 		elog.Error(10, err.Error())
 		return false, 2

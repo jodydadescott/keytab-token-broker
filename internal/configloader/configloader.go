@@ -18,6 +18,7 @@ package configloader
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/jodydadescott/keytab-token-broker/config"
 	"github.com/jodydadescott/keytab-token-broker/internal/app"
+	"github.com/open-policy-agent/opa/rego"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v2"
@@ -42,6 +44,13 @@ const (
 // ConfigLoader Config
 type ConfigLoader struct {
 	Config *config.Config
+}
+
+// NewConfigLoader Return new ConfigLoader instance
+func NewConfigLoader() *ConfigLoader {
+	return &ConfigLoader{
+		Config: config.NewConfig(),
+	}
 }
 
 // ServerConfig Returns Server Config
@@ -161,8 +170,10 @@ func (t *ConfigLoader) ZapConfig() (*zap.Config, error) {
 
 }
 
-// NewConfigLoaderFromBytes Return new ConfigLoader from bytes
-func NewConfigLoaderFromBytes(input []byte) (*ConfigLoader, error) {
+// LoadeFromBytes Load data from bytes
+func (t *ConfigLoader) LoadeFromBytes(input []byte) error {
+
+	// Input could be JSON, YAML or REGO Policy
 
 	var config *config.Config
 
@@ -170,84 +181,98 @@ func NewConfigLoaderFromBytes(input []byte) (*ConfigLoader, error) {
 	if err != nil {
 		err = json.Unmarshal(input, &config)
 		if err != nil {
-			return nil, fmt.Errorf("Input is not valid YAML or JSON config")
+
+			ctx := context.Background()
+
+			policyString := string(input)
+
+			_, err := rego.New(
+				rego.Query("grant_new_nonce = data.kbridge.grant_new_nonce; data.kbridge.get_principals[get_principals]"),
+				rego.Module("kerberos.rego", policyString),
+			).PrepareForEval(ctx)
+
+			if err == nil {
+				t.Config.Policy.Policy = policyString
+				return nil
+			}
+
+			return fmt.Errorf("Input is not valid YAML, JSON or Rego config")
+
 		}
 	}
 
 	// This should be done before the unmarshalling by reading the first
 	if config.APIVersion == "" {
-		return nil, fmt.Errorf("Missing APIVersion")
+		return fmt.Errorf("Missing APIVersion")
 	}
 
 	if config.APIVersion != "V1" {
-		return nil, fmt.Errorf(fmt.Sprintf("APIVersion %s not supported", config.APIVersion))
+		return fmt.Errorf(fmt.Sprintf("APIVersion %s not supported", config.APIVersion))
 	}
 
-	return &ConfigLoader{
-		Config: config,
-	}, nil
+	t.Config.Merge(config)
 
+	return nil
 }
 
-// NewConfigLoaderFromFileOrURL Return new ConfigLoader from file
-func NewConfigLoaderFromFileOrURL(input string) (*ConfigLoader, error) {
+// LoadFromFileOrURL Load data from file or URL
+func (t *ConfigLoader) LoadFromFileOrURL(input string) error {
 
 	if strings.HasPrefix(input, "https://") || strings.HasPrefix(input, "http://") {
 
 		req, err := http.NewRequest("GET", input, nil)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		resp, err := getHTTPClient().Do(req)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		defer resp.Body.Close()
 
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf(fmt.Sprintf("%s returned status code %d", input, resp.StatusCode))
+			return fmt.Errorf(fmt.Sprintf("%s returned status code %d", input, resp.StatusCode))
 		}
 
-		return NewConfigLoaderFromBytes(b)
+		return t.LoadeFromBytes(b)
 	}
 
 	f, err := os.Open(input)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	defer f.Close()
 
 	reader := bufio.NewReader(f)
-	content, err := ioutil.ReadAll(reader)
+	b, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return NewConfigLoaderFromBytes(content)
+	return t.LoadeFromBytes(b)
 
 }
 
-// NewConfigLoader Return new ConfigLoader from local settings
-func NewConfigLoader() (*ConfigLoader, error) {
+// LoadFromLocal Load data from registry or static file
+func (t *ConfigLoader) LoadFromLocal() error {
 
 	fileOrURL, err := GetRuntimeConfigString()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if fileOrURL == "" {
-		return nil, errors.New("config location not found")
+		return errors.New("config location not found")
 	}
 
-	return NewConfigLoaderFromFileOrURL(fileOrURL)
-
+	return t.LoadFromFileOrURL(fileOrURL)
 }
 
 func getHTTPClient() *http.Client {
