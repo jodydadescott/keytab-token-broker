@@ -34,8 +34,6 @@ const (
 	maxCacheRefreshInterval         = 3600
 
 	defaultLifetime int = 60
-	minLifetime         = 30
-	maxLifetime         = 86400 // 1 Day
 )
 
 // Config Config
@@ -69,14 +67,6 @@ func (config *Config) Build() (*NonceCache, error) {
 
 	if config.Lifetime > 0 {
 		lifetime = config.Lifetime
-	}
-
-	if cacheRefreshInterval < minCacheRefreshInterval || cacheRefreshInterval > maxCacheRefreshInterval {
-		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "CacheRefreshInterval", minCacheRefreshInterval, maxCacheRefreshInterval))
-	}
-
-	if lifetime > maxLifetime || lifetime < minLifetime {
-		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "Lifetime", minLifetime, maxLifetime))
 	}
 
 	cacheMapConfig := &cachemap.Config{

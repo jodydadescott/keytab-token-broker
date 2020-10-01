@@ -22,4 +22,6 @@
   name =  "github.com/jinzhu/copier"
   branch = "master"
 
-  
+  [[constraint]]
+  name =  "github.com/pquerna/otp"
+  branch = "master"

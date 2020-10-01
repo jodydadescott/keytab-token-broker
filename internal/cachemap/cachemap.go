@@ -47,8 +47,8 @@ type CacheMap struct {
 	mutex    sync.RWMutex
 	internal map[string]Entity
 	closed   chan struct{}
-	wg       sync.WaitGroup
 	ticker   *time.Ticker
+	wg       sync.WaitGroup
 }
 
 // Build ...
@@ -62,26 +62,30 @@ func (c *Config) Build() (*CacheMap, error) {
 		return nil, fmt.Errorf("cacheRefreshInterval must be greater then zero")
 	}
 
-	cacheMap := &CacheMap{
+	t := &CacheMap{
 		name:     c.Name,
 		internal: make(map[string]Entity),
 		closed:   make(chan struct{}),
 		ticker:   time.NewTicker(time.Duration(c.CacheRefreshInterval) * time.Second),
+		wg:       sync.WaitGroup{},
 	}
 
 	go func() {
+		t.wg.Add(1)
 		for {
 			select {
-			case <-cacheMap.closed:
-				zap.L().Debug(fmt.Sprintf("Shutting down token cache %s", cacheMap.name))
+			case <-t.closed:
+				zap.L().Debug(fmt.Sprintf("Shutting down token cache %s", t.name))
+				t.wg.Done()
 				return
-			case <-cacheMap.ticker.C:
+			case <-t.ticker.C:
+				t.processCache()
 
 			}
 		}
 	}()
 
-	return cacheMap, nil
+	return t, nil
 }
 
 // Shutdown ...

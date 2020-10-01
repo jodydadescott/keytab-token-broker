@@ -1,6 +1,9 @@
 #!/bin/bash
 ########################################################################################
-# Example Script showing how to get Keytab from Keytab Broker Server
+# Example Script showing how to get Keytab from Keytab Broker Server, mount CIFS
+# filesystem and write data
+#
+# This script expands on kinit_client.bash
 # 
 # Process Overview
 # 1) Get a token from the token server
@@ -13,6 +16,9 @@
 # 6) Using the principal name attribute from the Keytab principal attribute
 #    obtain a TGT from the Kerberos server. Note that the principal attribute
 #    will differ from the original principal.
+# 7) Mount CIFS filesystem
+# 8) Write Random string to mounted filesystem
+# 9) Un-mount CIFS filesystem
 ########################################################################################
 
 PRINCIPAL="superman@EXAMPLE.COM"
@@ -38,6 +44,7 @@ function main() {
   trap cleanup EXIT
 
   tkinit || return $?
+  write_data || return $?
   return 0
 }
 
@@ -88,6 +95,19 @@ function tkinit() {
     return 3
   }
   log_ok
+}
+
+function write_data() {
+  log "${YELLOW}Mount Windows CIFS share with user ${PURPLE}${PRINCIPAL}${YELLOW}: ${NC}"
+  sudo mount /data || { log_fail; return 3; }
+  log_ok
+
+  local random_msg
+  random_msg="This is my random message $(openssl rand -base64 18)"
+  log "${YELLOW}Write random message ${PURPLE}$random_msg${YELLOW} to /data/random.txt: ${NC}"
+  echo "$random_msg" >> /data/random.txt || { log_fail; return 3; }
+  log_ok
+  sudo umount /data > /dev/null 2>&1
 }
 
 function httpGet() {

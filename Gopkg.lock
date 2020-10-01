@@ -18,6 +18,18 @@
   version = "v1.2.8"
 
 [[projects]]
+  digest = "1:b529f4bf748979caa18b599d40d13e8b6e591a74b340f315ce4f95e119c288c2"
+  name = "github.com/boombuler/barcode"
+  packages = [
+    ".",
+    "qr",
+    "utils",
+  ]
+  pruneopts = ""
+  revision = "3cfea5ab600ae37946be2b763b8ec2c1cf2d272d"
+  version = "v1.0.0"
+
+[[projects]]
   branch = "master"
   digest = "1:87d04a9dda6bc2edeb2510807433f505d94870570b533cb8482ba7daa668b006"
   name = "github.com/dgrijalva/jwt-go"
@@ -183,6 +195,18 @@
   pruneopts = ""
   revision = "614d223910a179a466c1767a985424175c39b465"
   version = "v0.9.1"
+
+[[projects]]
+  branch = "master"
+  digest = "1:9d721174adcb647cb4cf235ad69951f731dff5a15184a74d16a13249c2e5df3a"
+  name = "github.com/pquerna/otp"
+  packages = [
+    ".",
+    "hotp",
+    "totp",
+  ]
+  pruneopts = ""
+  revision = "3006c03e19424e57e998d0faa7afe846b291ca14"
 
 [[projects]]
   branch = "master"
@@ -420,6 +444,7 @@
     "github.com/jinzhu/copier",
     "github.com/mitchellh/go-homedir",
     "github.com/open-policy-agent/opa/rego",
+    "github.com/pquerna/otp/totp",
     "github.com/spf13/cobra",
     "github.com/spf13/viper",
     "go.uber.org/zap",

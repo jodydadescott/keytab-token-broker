@@ -32,14 +32,8 @@ var (
 
 const (
 	defaultCacheRefreshInterval int = 30
-
-	defaultSoftLifetime = 120
-	minSoftLifetime     = 30
-	maxSoftLifetime     = 86400
-
-	defaultHardLifetime = 600
-	minHardLifetime     = 30
-	maxHardLifetime     = 86400
+	defaultSoftLifetime             = 120
+	defaultHardLifetime             = 600
 )
 
 // Config Configuration
@@ -102,14 +96,6 @@ func (config *Config) Build() (*KeytabCache, error) {
 		hardLifetime = config.HardLifetime
 	}
 
-	if softLifetime > maxSoftLifetime || softLifetime < minSoftLifetime {
-		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "Lifetime", minSoftLifetime, maxSoftLifetime))
-	}
-
-	if hardLifetime > maxHardLifetime || hardLifetime < minHardLifetime {
-		return nil, fmt.Errorf(fmt.Sprintf("%s must be greater then %d and less then %d", "HardLifetime", minHardLifetime, maxHardLifetime))
-	}
-
 	if softLifetime > hardLifetime {
 		return nil, fmt.Errorf("HardLifetime must be greater then (soft) Lifetime")
 	}
@@ -120,6 +106,7 @@ func (config *Config) Build() (*KeytabCache, error) {
 		hardLifetime: int64(hardLifetime),
 		closed:       make(chan struct{}),
 		ticker:       time.NewTicker(time.Duration(cacheRefreshInterval) * time.Second),
+		wg:           sync.WaitGroup{},
 	}
 
 	if len(config.Principals) <= 0 {
@@ -153,7 +140,7 @@ func (config *Config) Build() (*KeytabCache, error) {
 	}
 
 	go func() {
-
+		t.wg.Add(1)
 		// Initial
 		t.cacheRefresh()
 
@@ -161,6 +148,7 @@ func (config *Config) Build() (*KeytabCache, error) {
 			select {
 			case <-t.closed:
 				zap.L().Debug("Shutting down Keytab Cache")
+				t.wg.Done()
 				return
 			case <-t.ticker.C:
 				t.cacheRefresh()

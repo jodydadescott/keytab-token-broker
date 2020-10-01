@@ -1,4 +1,4 @@
-package app
+package policy
 
 import (
 	"context"
@@ -9,21 +9,19 @@ import (
 	"go.uber.org/zap"
 )
 
-type policyConfig struct {
+// Config ...
+type Config struct {
 	Query  string
 	Policy string
 }
 
-type policyDecision struct {
-	GetNonce   bool
-	Principals []string
-}
-
-type policy struct {
+// Policy ...
+type Policy struct {
 	query rego.PreparedEvalQuery
 }
 
-func (config *policyConfig) build() (*policy, error) {
+// Build ...
+func (config *Config) Build() (*Policy, error) {
 
 	if config.Query == "" {
 		return nil, fmt.Errorf("Query is empty")
@@ -44,12 +42,13 @@ func (config *policyConfig) build() (*policy, error) {
 		return nil, err
 	}
 
-	return &policy{
+	return &Policy{
 		query: query,
 	}, nil
 }
 
-func (t *policy) renderDecision(ctx context.Context, input interface{}) (*policyDecision, error) {
+// RenderDecision Return rendered decision
+func (t *Policy) RenderDecision(ctx context.Context, input interface{}) (*Decision, error) {
 
 	results, err := t.query.Eval(ctx, rego.EvalInput(input))
 
@@ -64,20 +63,20 @@ func (t *policy) renderDecision(ctx context.Context, input interface{}) (*policy
 	}
 
 	ok := false
-	getNonce := false
+	auth := false
 
-	getNonce, ok = results[0].Bindings["grant_new_nonce"].(bool)
+	auth, ok = results[0].Bindings["auth"].(bool)
 
 	if !ok {
-		return nil, fmt.Errorf("Received unexpected type %s; expected type bool", reflect.TypeOf(results[0].Bindings["grant_new_nonce"]))
+		return nil, fmt.Errorf("Received unexpected type %s; expected type bool", reflect.TypeOf(results[0].Bindings["auth"]))
 	}
 
 	var tmpprincipals []interface{}
 
-	tmpprincipals, ok = results[0].Bindings["get_principals"].([]interface{})
+	tmpprincipals, ok = results[0].Bindings["principals"].([]interface{})
 
 	if !ok {
-		return nil, fmt.Errorf("Received unexpected type %s; expected type []interface{}", reflect.TypeOf(results[0].Bindings["get_principals"]))
+		return nil, fmt.Errorf("Received unexpected type %s; expected type []interface{}", reflect.TypeOf(results[0].Bindings["principals"]))
 	}
 
 	principals := []string{}
@@ -88,21 +87,8 @@ func (t *policy) renderDecision(ctx context.Context, input interface{}) (*policy
 	//xtype := reflect.TypeOf(results[0].Bindings["principals"])
 	// fmt.Println(xtype)
 
-	return &policyDecision{
-		GetNonce:   getNonce,
+	return &Decision{
+		Auth:       auth,
 		Principals: principals,
 	}, nil
-}
-
-// HasPrincipal Returns true if principal is present in entity
-func (t *policyDecision) hasPrincipal(principal string) bool {
-	if principal == "" {
-		return false
-	}
-	for _, s := range t.Principals {
-		if s == principal {
-			return true
-		}
-	}
-	return false
 }

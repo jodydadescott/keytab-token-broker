@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"runtime"
 
 	"go.uber.org/zap"
 )
@@ -68,6 +67,9 @@ import (
 // This was with a service account and stderr was not checked. For this
 // reason we will return an auth err if the file does not exist. This
 // should be refined in the future.
+//
+// ktpass -mapUser bob@EXAMPLE.COM -pass ** -mapOp set -crypto AES256-SHA1 -ptype KRB5_NT_PRINCIPAL -princ HTTP/bob@EXAMPLE.COM -out keytab
+//
 func windowsNewKeytab(principal string) (string, error) {
 
 	dir, err := ioutil.TempDir("", "kt")
@@ -127,5 +129,5 @@ func windowsNewKeytab(principal string) (string, error) {
 }
 
 func unixNewKeytab(principal string) (string, error) {
-	return fmt.Sprintf("This is not a valid keytab file because the OS %s is not supported. Only Windows is supported at this time", runtime.GOOS), nil
+	return "this is not a valid keytab, it is fake", nil
 }

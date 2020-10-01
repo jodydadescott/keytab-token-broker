@@ -215,34 +215,53 @@ func (t *ConfigLoader) LoadeFromBytes(input []byte) error {
 	return nil
 }
 
-// LoadFromFileOrURL Load data from file or URL
-func (t *ConfigLoader) LoadFromFileOrURL(input string) error {
+// LoadFrom Load config(s) from one or more files or URLs (comma delimited)
+func (t *ConfigLoader) LoadFrom(input string) error {
 
-	if strings.HasPrefix(input, "https://") || strings.HasPrefix(input, "http://") {
+	var err error
 
-		req, err := http.NewRequest("GET", input, nil)
+	for _, s := range strings.Split(input, ",") {
+		if strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://") {
+			err = t.loadFromURL(s)
+		} else {
+			err = t.loadFromFile(s)
+		}
+
 		if err != nil {
 			return err
 		}
-
-		resp, err := getHTTPClient().Do(req)
-		if err != nil {
-			return err
-		}
-
-		defer resp.Body.Close()
-
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf(fmt.Sprintf("%s returned status code %d", input, resp.StatusCode))
-		}
-
-		return t.LoadeFromBytes(b)
 	}
+	return nil
+}
+
+func (t *ConfigLoader) loadFromURL(input string) error {
+
+	req, err := http.NewRequest("GET", input, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := getHTTPClient().Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf(fmt.Sprintf("%s returned status code %d", input, resp.StatusCode))
+	}
+
+	return t.LoadeFromBytes(b)
+
+}
+
+func (t *ConfigLoader) loadFromFile(input string) error {
 
 	f, err := os.Open(input)
 	if err != nil {
@@ -263,16 +282,21 @@ func (t *ConfigLoader) LoadFromFileOrURL(input string) error {
 // LoadFromLocal Load data from registry or static file
 func (t *ConfigLoader) LoadFromLocal() error {
 
-	fileOrURL, err := GetRuntimeConfigString()
+	configString, err := GetRuntimeConfigString()
 	if err != nil {
 		return err
 	}
 
-	if fileOrURL == "" {
+	if configString == "" {
 		return errors.New("config location not found")
 	}
 
-	return t.LoadFromFileOrURL(fileOrURL)
+	err = t.LoadFrom(configString)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getHTTPClient() *http.Client {

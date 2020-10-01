@@ -18,6 +18,7 @@ package keytabs
 
 import (
 	"testing"
+	"time"
 )
 
 func Test1(t *testing.T) {
@@ -36,7 +37,15 @@ func Test1(t *testing.T) {
 	}
 	defer store.Shutdown()
 
+	time.Sleep(1 * time.Second)
+
 	k := store.GetKeytab("bob@example.com")
+
+	for i := 0; i < 5; i++ {
+		if k == nil {
+			time.Sleep(1 * time.Second)
+		}
+	}
 
 	if k == nil {
 		t.Fatalf("Unexpected")

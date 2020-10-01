@@ -6,18 +6,21 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var exampleQuery string = "grant_new_nonce = data.kbridge.grant_new_nonce; data.kbridge.get_principals[get_principals]"
+var exampleQuery = "auth = data.kbridge.auth; data.kbridge.principals[principals]"
 
-var examplePolicy string = `
+var examplePolicy = `
 package kbridge
+	
+default auth = false
 
-default grant_new_nonce = false
-grant_new_nonce {
+auth {
 	input.iss == "https://api.console.aporeto.com/v/1/namespaces/5ddc396b9facec0001d3c886/oauthinfo"
 }
-get_principals[grant] {
-	grant := split(input.claims.service.keytab,",")
+
+principals[grant] {
+	grant := split(input.service.keytab,",")
 }
+
 `
 
 // NewV1ExampleConfig New example config

@@ -101,27 +101,6 @@ var configCmd = &cobra.Command{
 	Short: "manage configuration",
 }
 
-var configImportCmd = &cobra.Command{
-	Use:   "import",
-	Short: "import config from file or url",
-
-	RunE: func(cmd *cobra.Command, args []string) error {
-
-		if len(args) < 1 {
-			return errors.New("config string required")
-		}
-
-		runtimeConfigString := args[0]
-		// Need to verify string
-
-		err := configloader.SetRuntimeConfigString(runtimeConfigString)
-		if err != nil {
-			return err
-		}
-		return nil
-	},
-}
-
 var configSetCmd = &cobra.Command{
 	Use:   "set",
 	Short: "set configuration",
@@ -191,15 +170,12 @@ var configMakeCmd = &cobra.Command{
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		//example config policy query
-
-		var err error
 		configLoader := configloader.NewConfigLoader()
 
 		// Input config can be zero, one or many
 		if viper.GetString("config") != "" {
 			for _, s := range strings.Split(viper.GetString("config"), ",") {
-				err = configLoader.LoadFromFileOrURL(s)
+				err := configLoader.LoadFrom(s)
 				if err != nil {
 					return err
 				}
@@ -239,7 +215,7 @@ var runDebugCmd = &cobra.Command{
 		if viper.GetString("config") == "" {
 			err = configLoader.LoadFromLocal()
 		} else {
-			err = configLoader.LoadFromFileOrURL(viper.GetString("config"))
+			err = configLoader.LoadFrom(viper.GetString("config"))
 		}
 
 		if err != nil {
@@ -297,7 +273,7 @@ var serverCmd = &cobra.Command{
 		if viper.GetString("config") == "" {
 			err = configLoader.LoadFromLocal()
 		} else {
-			err = configLoader.LoadFromFileOrURL(viper.GetString("config"))
+			err = configLoader.LoadFrom(viper.GetString("config"))
 		}
 
 		if err != nil {
@@ -342,7 +318,6 @@ var serverCmd = &cobra.Command{
 
 // Execute ...
 func Execute() {
-
 	if runtime.GOOS == "windows" {
 		isIntSess, err := isAnInteractiveSession()
 		if err != nil {
