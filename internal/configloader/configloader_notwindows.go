@@ -1,4 +1,4 @@
-// +build linux
+// +build linux darwin
 
 /*
 Copyright © 2020 Jody Scott <jody@thescottsweb.com>
@@ -19,45 +19,21 @@ limitations under the License.
 package configloader
 
 import (
-	"bufio"
-	"io/ioutil"
-	"os"
+	"fmt"
 
-	"github.com/mitchellh/go-homedir"
+	"go.uber.org/zap/zapcore"
 )
-
-var staticRuntimeConfigFile = "/.kbridge-runtime"
 
 // GetRuntimeConfigString ...
 func GetRuntimeConfigString() (string, error) {
-
-	home, err := homedir.Dir()
-	if err != nil {
-		return "", err
-	}
-
-	f, err := os.Open(home + staticRuntimeConfigFile)
-	if err != nil {
-		return "", err
-	}
-
-	defer f.Close()
-
-	reader := bufio.NewReader(f)
-	content, err := ioutil.ReadAll(reader)
-	if err != nil {
-		return "", err
-	}
-	return string(content), nil
+	return "", fmt.Errorf("Not supported")
 }
 
 // SetRuntimeConfigString ...
 func SetRuntimeConfigString(runtimeConfigString string) error {
+	return fmt.Errorf("Not supported")
+}
 
-	home, err := homedir.Dir()
-	if err != nil {
-		return err
-	}
-
-	return ioutil.WriteFile(home+staticRuntimeConfigFile, []byte(runtimeConfigString), 0644)
+func getZapHook() (func(zapcore.Entry) error, error) {
+	return nil, fmt.Errorf("Not supported")
 }

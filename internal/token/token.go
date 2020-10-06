@@ -33,7 +33,7 @@ type Token struct {
 	Claims      map[string]interface{} `json:"claims,omitempty" yaml:"claims,omitempty"`
 }
 
-// JSON ...
+// JSON Return JSON String representation
 func (t *Token) JSON() string {
 	j, _ := json.Marshal(t)
 	return string(j)

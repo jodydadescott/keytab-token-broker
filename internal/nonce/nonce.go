@@ -28,7 +28,7 @@ type Nonce struct {
 	Value string `json:"value,omitempty" yaml:"value,omitempty"`
 }
 
-// JSON ...
+// JSON Return JSON String representation
 func (t *Nonce) JSON() string {
 	j, _ := json.Marshal(t)
 	return string(j)

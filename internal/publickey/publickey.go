@@ -32,7 +32,7 @@ type PublicKey struct {
 	Exp            int64            `json:"exp,omitempty" yaml:"exp,omitempty"`
 }
 
-// JSON ...
+// JSON Return JSON String representation
 func (t *PublicKey) JSON() string {
 	j, _ := json.Marshal(t)
 	return string(j)

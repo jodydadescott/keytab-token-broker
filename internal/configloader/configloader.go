@@ -20,11 +20,11 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -42,7 +42,10 @@ const (
 	requestTimeout     int = 60
 )
 
-// ConfigLoader Config
+// ConfigLoader Load Config from one or more places such as Windows Registry,
+// FileSystem and URL. ConfigLoader handles different config versions and
+// merging of configurations into single runtime config that consist of
+// the application config and Zap logger config
 type ConfigLoader struct {
 	Config *config.Config
 }
@@ -75,7 +78,7 @@ func (t *ConfigLoader) ServerConfig() (*app.Config, error) {
 		serverConfig.Nonce.Lifetime = t.Config.Policy.NonceLifetime
 
 		if t.Config.Policy.KeytabTimePeriod != "" {
-			serverConfig.Keytab.TimePeriod, err = timeperiod.GetTimePeriodFromString(t.Config.Policy.KeytabTimePeriod)
+			serverConfig.Keytab.TimePeriod, err = timeperiod.FromString(t.Config.Policy.KeytabTimePeriod)
 			if err != nil {
 				return nil, err
 			}
@@ -290,21 +293,22 @@ func (t *ConfigLoader) loadFromFile(input string) error {
 
 }
 
-// LoadFromLocal Load data from registry or static file
+// LoadFromLocal Load data from registry. Its primary purpose is
+// to load config from the Windows registry. The implementation is
+// platform specific.
 func (t *ConfigLoader) LoadFromLocal() error {
 
-	configString, err := GetRuntimeConfigString()
-	if err != nil {
-		return err
-	}
+	if runtime.GOOS == "windows" {
+		configString, err := GetRuntimeConfigString()
+		if err != nil {
+			return err
+		}
 
-	if configString == "" {
-		return errors.New("config location not found")
-	}
+		err = t.LoadFrom(configString)
+		if err != nil {
+			return err
+		}
 
-	err = t.LoadFrom(configString)
-	if err != nil {
-		return err
 	}
 
 	return nil

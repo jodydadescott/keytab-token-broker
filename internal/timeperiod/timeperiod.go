@@ -22,78 +22,72 @@ import (
 	"time"
 )
 
-// type TimePeriod struct {
-// 	ptime time.Time
-// }
-
-// type Config struct {
-// 	ptime time.Time
-// }
-
-// TimePeriod ,,,
+// TimePeriod is a period of defined time such as a minute, hour or day. When
+// provided with an arbiitray time the period for which that time belongs to
+// can be derived. Additionally both the previous and next period can be derived.
 type TimePeriod string
 
 const (
-	// OneMinute ...
+	// OneMinute One Minute or 60 seconds
 	OneMinute TimePeriod = "OneMinute"
-	// FiveMinute ...
+	// FiveMinute Five Minutes
 	FiveMinute = "FiveMinute"
-	// QuarterHour ...
+	// QuarterHour Fifteen Minutes
 	QuarterHour = "QuarterHour"
-	// HalfHour ...
+	// HalfHour Thirty Minutes
 	HalfHour = "HalfHour"
-	// Hour ...
+	// Hour One hour
 	Hour = "Hour"
-	// QuarterDay ...
+	// QuarterDay Six Hours
 	QuarterDay = "QuarterDay"
-	// HalfDay ...
+	// HalfDay Twelve Hours
 	HalfDay = "HalfDay"
-	// Day ...
+	// Day One Day
 	Day = "Day"
 )
 
-// GetOneMinute ...
+// GetOneMinute Returns OneMinute TimePeriod
 func GetOneMinute() TimePeriod {
 	return OneMinute
 }
 
-// GetFiveMinute ...
+// GetFiveMinute Returns FiveMinute TimePeriod
 func GetFiveMinute() TimePeriod {
 	return FiveMinute
 }
 
-// GetQuarterHour ...
+// GetQuarterHour Returns QuarterHour TimePeriod
 func GetQuarterHour() TimePeriod {
 	return QuarterHour
 }
 
-// GetHalfHour ...
+// GetHalfHour Returns HalfHour TimePeriod
 func GetHalfHour() TimePeriod {
 	return HalfHour
 }
 
-// GetHour ...
+// GetHour Returns Hour TimePeriod
 func GetHour() TimePeriod {
 	return Hour
 }
 
-// GetQuarterDay ...
+// GetQuarterDay Returns QuarterDay TimePeriod
 func GetQuarterDay() TimePeriod {
 	return QuarterDay
 }
 
-// GetHalfDay ...
+// GetHalfDay Returns HalfDay TimePeriod
 func GetHalfDay() TimePeriod {
 	return HalfDay
 }
 
-// GetDay ...
+// GetDay Returns Day TimePeriod
 func GetDay() TimePeriod {
 	return Day
 }
 
-// GetTimePeriodFromString Return time period from string
-func GetTimePeriodFromString(timeperiod string) (TimePeriod, error) {
+// FromString Return TimePeriod from string
+func FromString(timeperiod string) (TimePeriod, error) {
 
 	switch strings.ToLower(timeperiod) {
 
@@ -126,7 +120,7 @@ func GetTimePeriodFromString(timeperiod string) (TimePeriod, error) {
 	return "", fmt.Errorf(fmt.Sprintf("%s is not a known time period", timeperiod))
 }
 
-// Now TimePeriod happening now now
+// Now Returns top of time of current TimePeriod
 func (t TimePeriod) Now(now time.Time) time.Time {
 
 	switch t {
@@ -160,7 +154,7 @@ func (t TimePeriod) Now(now time.Time) time.Time {
 	panic("this should never happen")
 }
 
-// Next TimePeriod happening after now
+// Next Returns top of time of next TimePeriod
 func (t TimePeriod) Next(now time.Time) time.Time {
 
 	switch t {
@@ -195,7 +189,7 @@ func (t TimePeriod) Next(now time.Time) time.Time {
 
 }
 
-// Prev TimePeriod happened previous to now
+// Prev Returns top of time of previous TimePeriod
 func (t TimePeriod) Prev(now time.Time) time.Time {
 
 	switch t {
