@@ -318,6 +318,14 @@ var serverCmd = &cobra.Command{
 
 // Execute ...
 func Execute() {
+
+	// str := "4a451ca7180ec17ec7af809a"
+	// bs, err := hex.DecodeString(str)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println(string(bs))
+
 	if runtime.GOOS == "windows" {
 		isIntSess, err := isAnInteractiveSession()
 		if err != nil {
@@ -351,14 +359,11 @@ func init() {
 
 	// Server
 
-	serverCmd.PersistentFlags().StringP("config", "", "", "configuration file")
-	viper.BindPFlag("config", serverCmd.PersistentFlags().Lookup("config"))
+	rootCmd.PersistentFlags().StringP("config", "", "", "configuration file")
+	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
 
 	// Config
-	configMakeCmd.PersistentFlags().StringP("format", "", "", "output format in yaml or json; default is yaml")
-	viper.BindPFlag("format", configMakeCmd.PersistentFlags().Lookup("format"))
-
-	configMakeCmd.PersistentFlags().StringP("config", "", "", "input configuration file(s) (multiple use comma)")
-	viper.BindPFlag("config", configMakeCmd.PersistentFlags().Lookup("config"))
+	rootCmd.PersistentFlags().StringP("format", "", "", "output format in yaml or json; default is yaml")
+	viper.BindPFlag("format", rootCmd.PersistentFlags().Lookup("format"))
 
 }

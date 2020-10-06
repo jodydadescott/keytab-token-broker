@@ -21,10 +21,23 @@ Our solution is to use Tokens for Authentication and Authorization by executing 
 1. The KTB server validates the Token, executes an OPA policy to authorize the request, and returns the Nonce (JSON with fields value and exp)
 1. The client makes a request for a new Token from the token provider with the aforementioned Nonce as the Audience (aud) field
 1. Using the Token the client makes a request to the KTB server for a Keytab for a desired Principal
-1. The KTB server verifies the Token, Nonce and executes an OPA policy to authorize the request and returns the Keytab (JSON with fields base64file, softExp and hardExp)
+1. The KTB server verifies the Token, Nonce and executes an OPA policy to authorize the request and returns the Keytab (JSON with fields base64file, and exp)
 1. The client extracts the Base64 from the Keytab JSON object and recreates a Keytab file
 
+## Details
+
+### Keytabs
+Keytabs hold one or more principals or users and their corresponding password. The password is encrypted by the Kerberos Domain Controller (KDC). The Keytab is valid as long as the corresponding principal account is valid and the password is not changed. For our implementation we only support one principal at this time.
+
+### Keytab Lifetime
+The keytab lifetime is set by runtime configuration. At the top of each lifetime period a new keytab will be generated for each configured principal. For example if the lifetime 
+
+
+Our implementation only supports one principal. The principal is the username + the domain with "HTTP/" prepended. For example the user "superman" on the domain "EXAMPLE.COM" will have the principal name of "HTTP/superman@EXAMPLE.COM". The lifetime of keytabs are set by configuration at runtime. At the top of the lifetime keytabs are created for each principal in the runtime configuration. The password is created using a One Time Password (OTP) from a OTP generator combined with the principal and the OTP seed. The OTP seed is set in the configuration. This means that the server can be ran on multiple servers with no state coordination as long as the seed matches. Obviously the seed must be kept secure.
+
 ### Caveats
+
+Keytabs hold encrypted passwords. They are invalidated when the password is changed and AFAIK Windows will only support one password at a time. Hence their can only be 
 
 Unlike tokens, there can only be one valid Keytab at a time. Consider the situation where a Keytab is requested and an expiration of 120 seconds in the future is assigned. Then consider that 110 seconds later a new Keytab is requested. If we hand out the existing Keytab it only has 10 seconds of life left. If we recreate a new Keytab then we are breaking the contract for the first Keytab. Our solution is to reset the expiration time in this situation. This creates a problem that if a key is continuously requested before expiration it will never really expire. Our solution for this is to have a soft expiration and a hard expiration. The soft expiration can be incremented but the hard expiration cannot be increased. We expose both the soft and hard expiration values as fields in the request.
 

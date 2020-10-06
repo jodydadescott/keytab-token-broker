@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jodydadescott/keytab-token-broker/internal/keytabs"
-	"github.com/jodydadescott/keytab-token-broker/internal/nonces"
+	"github.com/jodydadescott/keytab-token-broker/internal/keytab"
+	"github.com/jodydadescott/keytab-token-broker/internal/nonce"
 	"github.com/jodydadescott/keytab-token-broker/internal/policy"
-	"github.com/jodydadescott/keytab-token-broker/internal/tokens"
+	"github.com/jodydadescott/keytab-token-broker/internal/token"
 	"go.uber.org/zap"
 )
 
@@ -29,9 +29,9 @@ var (
 // NewConfig Returns new config
 func NewConfig() *Config {
 	return &Config{
-		Nonce:  &nonces.Config{},
-		Token:  &tokens.Config{},
-		Keytab: &keytabs.Config{},
+		Nonce:  &nonce.Config{},
+		Token:  &token.Config{},
+		Keytab: &keytab.Config{},
 	}
 }
 
@@ -42,18 +42,19 @@ type Config struct {
 	HTTPSPort int
 	Query     string
 	Policy    string
-	Nonce     *nonces.Config
-	Token     *tokens.Config
-	Keytab    *keytabs.Config
+	Nonce     *nonce.Config
+	Token     *token.Config
+	Keytab    *keytab.Config
+	Seed      string
 }
 
 // Server ...
 type Server struct {
 	closed      chan struct{}
 	wg          sync.WaitGroup
-	tokenCache  *tokens.TokenCache
-	keytabCache *keytabs.KeytabCache
-	nonceCache  *nonces.NonceCache
+	tokenCache  *token.Tokens
+	keytabCache *keytab.Keytabs
+	nonceCache  *nonce.Nonces
 	httpServer  *http.Server
 	policy      *policy.Policy
 }
@@ -148,42 +149,39 @@ func (config *Config) Build() (*Server, error) {
 	return server, nil
 }
 
-func (t *Server) newNonce(ctx context.Context, token string) (*nonces.Nonce, error) {
+func (t *Server) newNonce(ctx context.Context, tokenString string) (*nonce.Nonce, error) {
 
-	if token == "" {
-		zap.L().Debug(fmt.Sprintf("newNonce(token=)->Denied:Fail : err=%s", "Token is empty"))
+	if tokenString == "" {
+		zap.L().Debug(fmt.Sprintf("newNonce(tokenString=)->Denied:Fail : err=%s", "tokenString is empty"))
 		return nil, ErrDataValidationFail
 	}
 
-	shortToken := token[1:8] + "..."
-
-	xtoken, err := t.tokenCache.GetToken(token)
+	xtoken, err := t.tokenCache.GetToken(tokenString)
 	if err != nil {
-		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[err=%s]", shortToken, err))
+		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[err=%s]", tokenString, err))
 		return nil, ErrAuthFail
 	}
 
 	// Validate that token is allowed to pull nonce
 	decision, err := t.policy.RenderDecision(ctx, xtoken.Claims)
 	if err != nil {
-		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[err=%s]", shortToken, err))
+		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[err=%s]", tokenString, err))
 		return nil, ErrAuthFail
 	}
 
 	if !decision.Auth {
 		err = fmt.Errorf("Authorization denied")
-		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[err=%s]", shortToken, err))
+		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[err=%s]", tokenString, err))
 		return nil, ErrAuthFail
 	}
 
 	nonce := t.nonceCache.NewNonce()
-	shortNonce := nonce.Value[1:8] + "..."
 
-	zap.L().Debug(fmt.Sprintf("newNonce(%s)->[%s]", shortToken, shortNonce))
+	zap.L().Debug(fmt.Sprintf("newNonce(%s)->[%s]", tokenString, nonce.Value))
 	return nonce, nil
 }
 
-func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keytabs.Keytab, error) {
+func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keytab.Keytab, error) {
 
 	shortToken := ""
 

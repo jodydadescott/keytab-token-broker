@@ -30,6 +30,7 @@ import (
 
 	"github.com/jodydadescott/keytab-token-broker/config"
 	"github.com/jodydadescott/keytab-token-broker/internal/app"
+	"github.com/jodydadescott/keytab-token-broker/internal/timeperiod"
 	"github.com/open-policy-agent/opa/rego"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -56,6 +57,8 @@ func NewConfigLoader() *ConfigLoader {
 // ServerConfig Returns Server Config
 func (t *ConfigLoader) ServerConfig() (*app.Config, error) {
 
+	var err error
+
 	serverConfig := app.NewConfig()
 
 	if t.Config.Network != nil {
@@ -68,8 +71,14 @@ func (t *ConfigLoader) ServerConfig() (*app.Config, error) {
 		serverConfig.Query = t.Config.Policy.Query
 		serverConfig.Policy = t.Config.Policy.Policy
 		serverConfig.Nonce.Lifetime = t.Config.Policy.NonceLifetime
-		serverConfig.Keytab.SoftLifetime = t.Config.Policy.KeytabSoftLifetime
-		serverConfig.Keytab.HardLifetime = t.Config.Policy.KeytabHardLifetime
+
+		if t.Config.Policy.KeytabTimePeriod != "" {
+			serverConfig.Keytab.TimePeriod, err = timeperiod.GetTimePeriodFromString(t.Config.Policy.KeytabTimePeriod)
+			if err != nil {
+				return nil, err
+			}
+		}
+		serverConfig.Keytab.Seed = t.Config.Policy.Seed
 	}
 
 	if t.Config.Data != nil {

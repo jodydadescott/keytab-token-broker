@@ -23,6 +23,16 @@ principals[grant] {
 
 `
 
+// TimePeriod
+// OneMinute
+// FiveMinute
+// QuarterHour
+// HalfHour
+// Hour
+// QuarterDay
+// HalfDay
+// Day
+
 // NewV1ExampleConfig New example config
 func NewV1ExampleConfig() *Config {
 	return &Config{
@@ -33,11 +43,11 @@ func NewV1ExampleConfig() *Config {
 			HTTPSPort: 8443,
 		},
 		Policy: &Policy{
-			Query:              exampleQuery,
-			Policy:             examplePolicy,
-			NonceLifetime:      60,
-			KeytabSoftLifetime: 120,
-			KeytabHardLifetime: 600,
+			Query:            exampleQuery,
+			Policy:           examplePolicy,
+			NonceLifetime:    60,
+			KeytabTimePeriod: "FiveMinute",
+			Seed:             "this is not a good seed",
 		},
 		Logging: &Logging{
 			LogLevel:         "info",
