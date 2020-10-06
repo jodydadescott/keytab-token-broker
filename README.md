@@ -97,3 +97,7 @@ And the corresponding query
 ## FAQ
 
 The reason we do not issue TGT tickets is that it is difficult to install these into the local cache. Linux has several different implementations of ticket caches and Windows does not, AFAIK, expose an API to read/write the TGT cache. Using the Keytab format also makes it easier for an existing script that expects a keytab file.
+
+
+openssl ecparam -genkey -name secp384r1 -out server.key
+openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650

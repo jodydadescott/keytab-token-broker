@@ -319,13 +319,6 @@ var serverCmd = &cobra.Command{
 // Execute ...
 func Execute() {
 
-	// str := "4a451ca7180ec17ec7af809a"
-	// bs, err := hex.DecodeString(str)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Println(string(bs))
-
 	if runtime.GOOS == "windows" {
 		isIntSess, err := isAnInteractiveSession()
 		if err != nil {

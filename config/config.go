@@ -21,6 +21,8 @@ type Network struct {
 	Listen    string `json:"Listen,omitempty" yaml:"Listen,omitempty"`
 	HTTPPort  int    `json:"httpPort,omitempty" yaml:"httpPort,omitempty"`
 	HTTPSPort int    `json:"httpsPort,omitempty" yaml:"httpsPort,omitempty"`
+	TLSCert   string `json:"tlscert,omitempty" yaml:"tlscert,omitempty"`
+	TLSKey    string `json:"tlsKey,omitempty" yaml:"tlsKey,omitempty"`
 }
 
 // Policy Config
@@ -98,6 +100,14 @@ func (t *Config) Merge(config *Config) {
 
 		if config.Network.HTTPSPort > 0 {
 			t.Network.HTTPSPort = config.Network.HTTPSPort
+		}
+
+		if config.Network.TLSKey != "" {
+			t.Network.TLSKey = config.Network.TLSKey
+		}
+
+		if config.Network.TLSCert != "" {
+			t.Network.TLSCert = config.Network.TLSCert
 		}
 
 	}

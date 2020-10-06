@@ -1,7 +1,24 @@
+/*
+Copyright © 2020 Jody Scott <jody@thescottsweb.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package app
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
@@ -37,26 +54,22 @@ func NewConfig() *Config {
 
 // Config ...
 type Config struct {
-	Listen    string
-	HTTPPort  int
-	HTTPSPort int
-	Query     string
-	Policy    string
-	Nonce     *nonce.Config
-	Token     *token.Config
-	Keytab    *keytab.Config
-	Seed      string
+	Listen, TLSCert, TLSKey, Query, Policy, Seed string
+	HTTPPort, HTTPSPort                          int
+	Nonce                                        *nonce.Config
+	Token                                        *token.Config
+	Keytab                                       *keytab.Config
 }
 
 // Server ...
 type Server struct {
-	closed      chan struct{}
-	wg          sync.WaitGroup
-	tokenCache  *token.Tokens
-	keytabCache *keytab.Keytabs
-	nonceCache  *nonce.Nonces
-	httpServer  *http.Server
-	policy      *policy.Policy
+	closed                  chan struct{}
+	wg                      sync.WaitGroup
+	tokenCache              *token.Tokens
+	keytabCache             *keytab.Keytabs
+	nonceCache              *nonce.Nonces
+	httpServer, httpsServer *http.Server
+	policy                  *policy.Policy
 }
 
 // Build Returns a new Server
@@ -108,24 +121,50 @@ func (config *Config) Build() (*Server, error) {
 		policy:      policy,
 	}
 
+	if config.HTTPPort > 0 {
+		listen := config.Listen
+		if strings.ToLower(listen) == "any" {
+			listen = ""
+		}
+		listener := listen + ":" + strconv.Itoa(config.HTTPPort)
+		zap.L().Debug("Starting HTTP")
+		server.httpServer = &http.Server{Addr: listener, Handler: server}
+		go func() {
+			server.httpServer.ListenAndServe()
+		}()
+	}
+
+	if config.HTTPSPort > 0 {
+		listen := config.Listen
+		if strings.ToLower(listen) == "any" {
+			listen = ""
+		}
+		listener := listen + ":" + strconv.Itoa(config.HTTPSPort)
+
+		zap.L().Debug("Starting HTTPS")
+
+		if config.TLSCert == "" {
+			return nil, fmt.Errorf("TLSCert is required when HTTPS port is set")
+		}
+
+		if config.TLSKey == "" {
+			return nil, fmt.Errorf("TLSKey is required when HTTPS port is set")
+		}
+
+		cert, err := tls.X509KeyPair([]byte(config.TLSCert), []byte(config.TLSKey))
+		if err != nil {
+			return nil, err
+		}
+
+		server.httpsServer = &http.Server{Addr: listener, Handler: server, TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}}}
+
+		go func() {
+			server.httpsServer.ListenAndServeTLS("", "")
+		}()
+
+	}
+
 	go func() {
-
-		if config.HTTPPort > 0 {
-			go func() {
-				listen := config.Listen
-				if strings.ToLower(listen) == "any" {
-					listen = ""
-				}
-				listener := listen + ":" + strconv.Itoa(config.HTTPPort)
-				zap.L().Debug("Starting HTTP")
-				server.httpServer = &http.Server{Addr: listener, Handler: server}
-				server.httpServer.ListenAndServe()
-			}()
-		}
-
-		if config.HTTPSPort > 0 {
-			zap.L().Debug("Starting HTTPS - Not implemented")
-		}
 
 		for {
 			select {

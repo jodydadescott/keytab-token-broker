@@ -65,6 +65,8 @@ func (t *ConfigLoader) ServerConfig() (*app.Config, error) {
 		serverConfig.Listen = t.Config.Network.Listen
 		serverConfig.HTTPPort = t.Config.Network.HTTPPort
 		serverConfig.HTTPSPort = t.Config.Network.HTTPSPort
+		serverConfig.TLSCert = t.Config.Network.TLSCert
+		serverConfig.TLSKey = t.Config.Network.TLSKey
 	}
 
 	if t.Config.Policy != nil {
