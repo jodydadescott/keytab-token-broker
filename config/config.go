@@ -27,14 +27,12 @@ type Network struct {
 
 // Policy Config
 type Policy struct {
-	Query            string `json:"query,omitempty" yaml:"query,omitempty"`
-	Policy           string `json:"policy,omitempty" yaml:"policy,omitempty"`
-	NonceLifetime    int    `json:"nonceLifetime,omitempty" yaml:"nonceLifetime,omitempty"`
-	KeytabTimePeriod string `json:"keytabTimePeriod,omitempty" yaml:"keytabTimePeriod,omitempty"`
-	Seed             string `json:"seed,omitempty" yaml:"seed,omitempty"`
+	Query          string `json:"query,omitempty" yaml:"query,omitempty"`
+	Policy         string `json:"policy,omitempty" yaml:"policy,omitempty"`
+	NonceLifetime  int    `json:"nonceLifetime,omitempty" yaml:"nonceLifetime,omitempty"`
+	KeytabLifetime int    `json:"keytabLifetime,omitempty" yaml:"keytabLifetime,omitempty"`
+	Seed           string `json:"seed,omitempty" yaml:"seed,omitempty"`
 }
-
-// KeytabTimePeriod: OneMinute,FiveMinute,QuarterHour,HalfHour,Hour,QuarterDay,HalfDay,Day
 
 // Logging Config
 type Logging struct {
@@ -130,8 +128,8 @@ func (t *Config) Merge(config *Config) {
 			t.Policy.NonceLifetime = config.Policy.NonceLifetime
 		}
 
-		if config.Policy.KeytabTimePeriod != "" {
-			t.Policy.KeytabTimePeriod = config.Policy.KeytabTimePeriod
+		if config.Policy.KeytabLifetime > 0 {
+			t.Policy.KeytabLifetime = config.Policy.KeytabLifetime
 		}
 
 		if config.Policy.Seed != "" {

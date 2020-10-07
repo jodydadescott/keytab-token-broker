@@ -21,7 +21,6 @@ import (
 	"encoding/base32"
 	"fmt"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -32,8 +31,11 @@ import (
 )
 
 var (
-	defaultTimePeriod = timeperiod.GetFiveMinute()
-	principalRegex    = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+	principalRegex = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+)
+
+const (
+	defaultLifetime = 300
 )
 
 // Config Configuration
@@ -46,7 +48,7 @@ var (
 type Config struct {
 	Seed       string
 	Principals []string
-	TimePeriod timeperiod.TimePeriod
+	Lifetime   int
 }
 
 // Keytabs holds and manages Kerberos Keytabs. Keytabs are generated or
@@ -86,7 +88,7 @@ type Keytabs struct {
 	internal                  map[string]*Keytab
 	seed                      string
 	principals                []string
-	timePeriod                timeperiod.TimePeriod
+	timePeriod                *timeperiod.TimePeriod
 }
 
 // Build Returns new instance of Keytabs
@@ -98,10 +100,20 @@ func (config *Config) Build() (*Keytabs, error) {
 		return nil, fmt.Errorf("Seed is empty")
 	}
 
-	timePeriod := defaultTimePeriod
+	lifetime := defaultLifetime
 
-	if config.TimePeriod != "" {
-		timePeriod = config.TimePeriod
+	if config.Lifetime > 0 {
+		lifetime = config.Lifetime
+	}
+
+	timePeriodConfig := &timeperiod.Config{
+		Seconds: lifetime,
+	}
+
+	timePeriod, err := timePeriodConfig.Build()
+
+	if err != nil {
+		return nil, err
 	}
 
 	t := &Keytabs{
@@ -230,12 +242,7 @@ func (t *Keytabs) cacheRefresh(now time.Time) {
 		// unique password. As long as seed and time are the same then passwords will
 		// match even when computed independentley
 
-		// Principal was already verified with from of user@domain. We get the username only
-		// for the hash. This means that if the seed is the same for two different instances
-		// and so is the username the password will be the same even if
-		username := strings.Split(principal, "@")[0]
-
-		password := fmt.Sprintf("%x", sha256.Sum256([]byte(t.seed+username+otp)))[:24]
+		password := fmt.Sprintf("%x", sha256.Sum256([]byte(t.seed+principal+otp)))[:24]
 		// A special character is required but a sha256 operation will not return
 		// a special char so for now statically added on a special char
 		password = password + `/a`

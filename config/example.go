@@ -67,11 +67,11 @@ func NewV1ExampleConfig() *Config {
 			TLSKey:    exampleTLSKey,
 		},
 		Policy: &Policy{
-			Query:            exampleQuery,
-			Policy:           examplePolicy,
-			NonceLifetime:    60,
-			KeytabTimePeriod: "FiveMinute",
-			Seed:             "this is not a good seed",
+			Query:          exampleQuery,
+			Policy:         examplePolicy,
+			NonceLifetime:  60,
+			KeytabLifetime: 60,
+			Seed:           "this is not a good seed",
 		},
 		Logging: &Logging{
 			LogLevel:         "info",
