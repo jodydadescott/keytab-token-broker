@@ -33,7 +33,7 @@ auth_get_keytab {
    # match with requested principal
    auth_base
    auth_nonce
-   split(input.claims.service.keytab,",")[_] == input.principals[_]
+   split(input.claims.service.keytab,",")[_] == input.principal
 }
 `
 

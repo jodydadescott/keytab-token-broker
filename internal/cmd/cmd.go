@@ -96,11 +96,6 @@ var serviceContinueCmd = &cobra.Command{
 	},
 }
 
-var serviceConfigCmd = &cobra.Command{
-	Use:   "config",
-	Short: "manage configuration",
-}
-
 var serviceConfigSetCmd = &cobra.Command{
 	Use:   "set",
 	Short: "set configuration",
@@ -348,10 +343,9 @@ func init() {
 
 	if runtime.GOOS == "windows" {
 
-		serviceConfigCmd.AddCommand(serviceConfigSetCmd, serviceConfigShowCmd, configMakeCmd)
-		serviceCmd.AddCommand(serviceInstallCmd, serviceRemoveCmd, serviceStartCmd, serviceStopCmd, servicePauseCmd, serviceContinueCmd, serviceConfigCmd)
+		serviceCmd.AddCommand(serviceInstallCmd, serviceRemoveCmd, serviceStartCmd, serviceStopCmd, servicePauseCmd, serviceContinueCmd, serviceConfigSetCmd, serviceConfigShowCmd)
 		configCmd.AddCommand(configExampleCmd, configMakeCmd)
-		rootCmd.AddCommand(serviceCmd, serviceConfigCmd, windowsRunDebugCmd)
+		rootCmd.AddCommand(serviceCmd, configCmd, windowsRunDebugCmd)
 
 	} else {
 
