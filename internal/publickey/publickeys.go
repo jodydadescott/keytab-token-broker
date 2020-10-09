@@ -47,7 +47,7 @@ var (
 
 // Config The config
 type Config struct {
-	CacheRefreshInterval, PublicKeyRequestTimeout, PublicKeyidleConnections int
+	CacheRefreshInterval, RequestTimeout, KeyidleConnections int
 }
 
 // PublicKeys ...
@@ -66,19 +66,19 @@ func (config *Config) Build() (*PublicKeys, error) {
 	zap.L().Debug("PublicKeys Starting")
 
 	cacheRefreshInterval := defaultCacheRefreshInterval
-	publicKeyRequestTimeout := defaultRequestTimeout
-	publicKeyidleConnections := defaultIdleConnections
+	requestTimeout := defaultRequestTimeout
+	idleConnections := defaultIdleConnections
 
 	if config.CacheRefreshInterval > 0 {
 		cacheRefreshInterval = config.CacheRefreshInterval
 	}
 
-	if config.PublicKeyRequestTimeout > 0 {
-		publicKeyRequestTimeout = config.PublicKeyRequestTimeout
+	if config.RequestTimeout > 0 {
+		requestTimeout = config.RequestTimeout
 	}
 
-	if config.PublicKeyidleConnections > 0 {
-		publicKeyidleConnections = config.PublicKeyidleConnections
+	if config.KeyidleConnections > 0 {
+		idleConnections = config.KeyidleConnections
 	}
 
 	t := &PublicKeys{
@@ -88,9 +88,9 @@ func (config *Config) Build() (*PublicKeys, error) {
 		wg:       sync.WaitGroup{},
 		httpClient: &http.Client{
 			Transport: &http.Transport{
-				MaxIdleConnsPerHost: publicKeyidleConnections,
+				MaxIdleConnsPerHost: idleConnections,
 			},
-			Timeout: time.Duration(publicKeyRequestTimeout) * time.Second,
+			Timeout: time.Duration(requestTimeout) * time.Second,
 		},
 	}
 

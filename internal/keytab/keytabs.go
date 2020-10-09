@@ -210,10 +210,6 @@ func getTime() time.Time {
 	return time.Now().In(time.UTC)
 }
 
-// func zeroTime(input time.Time) time.Time {
-// 	return time.Date(input.Year(), input.Month(), input.Day(), input.Hour(), input.Minute(), 0, 0, time.UTC)
-// }
-
 func (t *Keytabs) cacheRefresh(now time.Time) {
 
 	zap.L().Debug(fmt.Sprintf("Running cacheRefresh for period:%s", now))
