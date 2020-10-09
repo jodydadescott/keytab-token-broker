@@ -47,7 +47,7 @@ var (
 
 // Config The config
 type Config struct {
-	CacheRefreshInterval, RequestTimeout, KeyidleConnections int
+	CacheRefreshInterval, RequestTimeout, IdleConnections int
 }
 
 // PublicKeys ...
@@ -77,8 +77,8 @@ func (config *Config) Build() (*PublicKeys, error) {
 		requestTimeout = config.RequestTimeout
 	}
 
-	if config.KeyidleConnections > 0 {
-		idleConnections = config.KeyidleConnections
+	if config.IdleConnections > 0 {
+		idleConnections = config.IdleConnections
 	}
 
 	t := &PublicKeys{
