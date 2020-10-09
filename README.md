@@ -157,11 +157,7 @@ policy:
   # This is a OPA/Rego Policy. It must have the package name main and expose
   # the boolean functions auth_get_nonce and auth_get_keytab.
   # 
-  # The input format structure is the following
-  #
-  # Claims     []string
-	# Principal  string
-	# Nonce      string
+  # The input format structure has claims []string, principal and nonce string.
   #
   policy: |2
 
