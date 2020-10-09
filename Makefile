@@ -2,16 +2,16 @@ default:
 	$(MAKE) all
 
 windows:
-	mkdir -p dist
-	env GOOS=windows GOARCH=amd64 go build -o dist/ktbserver-windows-amd64.exe main.go
+	mkdir -p dist/windows
+	env GOOS=windows GOARCH=amd64 go build -o dist/windows/tokens2keytabs.exe main.go
 
 linux:
-	mkdir -p dist
-	env GOOS=linux GOARCH=amd64 go build -o dist/ktbserver-linux-amd64 main.go
+	mkdir -p dist/linux
+	env GOOS=linux GOARCH=amd64 go build -o dist/linux/tokens2keytabs main.go
 
 darwin:
-	mkdir -p dist
-	env GOOS=darwin GOARCH=amd64 go build -o dist/ktbserver-darwin-amd64 main.go
+	mkdir -p dist/darwin
+	env GOOS=darwin GOARCH=amd64 go build -o dist/darwin/tokens2keytabs main.go
 
 all:
 	$(MAKE) windows

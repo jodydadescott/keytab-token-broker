@@ -15,7 +15,7 @@ limitations under the License.
 */
 package main
 
-import "github.com/jodydadescott/keytab-token-broker/internal/cmd"
+import "github.com/jodydadescott/tokens2keytabs/internal/cmd"
 
 func main() {
 	cmd.Execute()

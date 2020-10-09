@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jodydadescott/keytab-token-broker/internal/configloader"
+	"github.com/jodydadescott/tokens2keytabs/internal/configloader"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sys/windows/svc"
@@ -33,8 +33,8 @@ import (
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-const svcName = "KTBServer"
-const svcDesc = "Keytab Token Broker Server"
+const svcName = "Tokens2Keytabs"
+const svcDesc = "JWT Token to Kerberos Keytab Server"
 
 var elog debug.Log
 

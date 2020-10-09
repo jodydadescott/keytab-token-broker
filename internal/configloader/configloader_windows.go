@@ -22,7 +22,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-var keyRegistryPath = `SOFTWARE\KTBServer`
+var keyRegistryPath = `SOFTWARE\t2k`
 
 // GetRuntimeConfigString ...
 func GetRuntimeConfigString() (string, error) {

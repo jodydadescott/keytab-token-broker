@@ -6,43 +6,57 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var exampleQuery = "auth = data.kbridge.auth; data.kbridge.principals[principals]"
-
 var examplePolicy = `
-package kbridge
-	
-default auth = false
+package main
 
-auth {
-	input.iss == "https://api.console.aporeto.com/v/1/namespaces/5ddc396b9facec0001d3c886/oauthinfo"
+default auth_get_nonce = false
+default auth_get_keytab = false
+
+auth_base {
+   # Match Issuer
+   input.claims.iss == "abc123"
 }
 
-principals[grant] {
-	grant := split(input.service.keytab,",")
+auth_get_nonce {
+   auth_base
 }
 
+auth_nonce {
+   # Verify that the request nonce matches the expected nonce. Our token provider
+   # has the nonce in the audience field under claims
+   input.claims.aud == input.nonce
+}
+
+auth_get_keytab {
+   # The nonce must be validated and then the principal. This is done by splitting the
+   # principals in the claim service.keytab by the comma into a set and checking for
+   # match with requested principal
+   auth_base
+   auth_nonce
+   split(input.claims.service.keytab,",")[_] == input.principals[_]
+}
 `
 
 var exampleTLSCert = `-----BEGIN CERTIFICATE-----
-MIICMDCCAbUCCQDfhpjqkd8ewjAKBggqhkjOPQQDAjCBgDELMAkGA1UEBhMCVVMx
-CzAJBgNVBAgMAlRYMRIwEAYDVQQHDAlTb3V0aGxha2UxDTALBgNVBAoMBEpvZHkx
-DTALBgNVBAsMBEpvZHkxEDAOBgNVBAMMB2V4YW1wbGUxIDAeBgkqhkiG9w0BCQEW
-EWFkbWluQGV4YW1wbGUuY29tMB4XDTIwMTAwNjIxMjUwOVoXDTMwMTAwNDIxMjUw
-OVowgYAxCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJUWDESMBAGA1UEBwwJU291dGhs
-YWtlMQ0wCwYDVQQKDARKb2R5MQ0wCwYDVQQLDARKb2R5MRAwDgYDVQQDDAdleGFt
-cGxlMSAwHgYJKoZIhvcNAQkBFhFhZG1pbkBleGFtcGxlLmNvbTB2MBAGByqGSM49
-AgEGBSuBBAAiA2IABH5IWn5ZRoCBxiaoWcHxsR8ozPN5zsnoBRT/aI+b5kQYxnOr
-/Qd3tFnuq955BpfAbuGMfieqrrMop1wkcysz3KcglqlzUTy/Kk+FmmNWWUA/KE1W
-Z70r0u9nG1FSQgHLtTAKBggqhkjOPQQDAgNpADBmAjEAueGyOviFCHJDqJxv+sZA
-oSXPQqUnGzTfiOBT+e/iSXPuedrq2aTl9iDxjX3I/kLQAjEAnzZM29NgpI1D/28G
-HyMaJavNYa31o1fSMKGW67zNV0LNy3X3FSyPLbVX4KT3Jy13
+................................................................
+................................................................
+................................................................
+................................................................
+................................................................
+................................................................
+................................................................
+................................................................
+................................................................
+................................................................
+................................................................
+....................................
 -----END CERTIFICATE-----`
 
 var exampleTLSKey = `-----BEGIN EC PRIVATE KEY-----
-MIGkAgEBBDBWh9l1d6MvJeEU9wfo4GcLULM8NU01h5fej7h8NMBjLdjWEwt4Ted8
-AxAnwk018C6gBwYFK4EEACKhZANiAAR+SFp+WUaAgcYmqFnB8bEfKMzzec7J6AUU
-/2iPm+ZEGMZzq/0Hd7RZ7qveeQaXwG7hjH4nqq6zKKdcJHMrM9ynIJapc1E8vypP
-hZpjVllAPyhNVme9K9LvZxtRUkIBy7U=
+................................................................
+................................................................
+................................................................
+................................
 -----END EC PRIVATE KEY-----`
 
 // TimePeriod
@@ -67,7 +81,6 @@ func NewV1ExampleConfig() *Config {
 			TLSKey:    exampleTLSKey,
 		},
 		Policy: &Policy{
-			Query:          exampleQuery,
 			Policy:         examplePolicy,
 			NonceLifetime:  60,
 			KeytabLifetime: 60,

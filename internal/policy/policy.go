@@ -19,7 +19,6 @@ package policy
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	"github.com/open-policy-agent/opa/rego"
 	"go.uber.org/zap"
@@ -27,7 +26,6 @@ import (
 
 // Config ...
 type Config struct {
-	Query  string
 	Policy string
 }
 
@@ -39,10 +37,6 @@ type Policy struct {
 // Build ...
 func (config *Config) Build() (*Policy, error) {
 
-	if config.Query == "" {
-		return nil, fmt.Errorf("Query is empty")
-	}
-
 	if config.Policy == "" {
 		return nil, fmt.Errorf("Policy is empty")
 	}
@@ -50,7 +44,7 @@ func (config *Config) Build() (*Policy, error) {
 	ctx := context.Background()
 
 	query, err := rego.New(
-		rego.Query(config.Query),
+		rego.Query("auth_get_nonce = data.main.auth_get_nonce; auth_get_keytab = data.main.auth_get_keytab"),
 		rego.Module("kerberos.rego", config.Policy),
 	).PrepareForEval(ctx)
 
@@ -63,48 +57,62 @@ func (config *Config) Build() (*Policy, error) {
 	}, nil
 }
 
-// RenderDecision Return rendered decision
-func (t *Policy) RenderDecision(ctx context.Context, input interface{}) (*Decision, error) {
+// AuthGetNonce Auth that claims are allowed to get nonce
+func (t *Policy) AuthGetNonce(ctx context.Context, claims map[string]interface{}) bool {
+
+	input := &Input{
+		Claims: claims,
+	}
 
 	results, err := t.query.Eval(ctx, rego.EvalInput(input))
 
 	if err != nil {
-		zap.L().Error(fmt.Sprintf("error->%s", err))
-		return nil, err
+		zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; err->%s", err))
+		return false
 	}
 
 	if len(results) == 0 {
-		fmt.Println("No results")
-		return nil, fmt.Errorf("No results")
+		zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; results are empty"))
+		return false
 	}
 
-	ok := false
-	auth := false
+	// data.kbridge.auth_get_keytab
 
-	auth, ok = results[0].Bindings["auth"].(bool)
-
-	if !ok {
-		return nil, fmt.Errorf("Received unexpected type %s; expected type bool", reflect.TypeOf(results[0].Bindings["auth"]))
+	if auth, ok := results[0].Bindings["auth_get_nonce"].(bool); ok {
+		zap.L().Error(fmt.Sprintf("Got result %t", auth))
+		return auth
 	}
 
-	var tmpprincipals []interface{}
+	zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; unexpected result type"))
+	return false
+}
 
-	tmpprincipals, ok = results[0].Bindings["principals"].([]interface{})
+// AuthGetKeytab Auth that claims, nonce and principals are allowed to get requested keytab
+func (t *Policy) AuthGetKeytab(ctx context.Context, claims map[string]interface{}, nonce, principal string) bool {
 
-	if !ok {
-		return nil, fmt.Errorf("Received unexpected type %s; expected type []interface{}", reflect.TypeOf(results[0].Bindings["principals"]))
+	input := &Input{
+		Claims:    claims,
+		Nonce:     nonce,
+		Principal: principal,
 	}
 
-	principals := []string{}
-	for _, principal := range tmpprincipals {
-		principals = append(principals, fmt.Sprintf("%s", principal))
+	results, err := t.query.Eval(ctx, rego.EvalInput(input))
+
+	if err != nil {
+		zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; err->%s", err))
+		return false
 	}
 
-	//xtype := reflect.TypeOf(results[0].Bindings["principals"])
-	// fmt.Println(xtype)
+	if len(results) == 0 {
+		zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; results are empty"))
+		return false
+	}
 
-	return &Decision{
-		Auth:       auth,
-		Principals: principals,
-	}, nil
+	if auth, ok := results[0].Bindings["auth_get_keytab"].(bool); ok {
+		zap.L().Error(fmt.Sprintf("Got result %t", auth))
+		return auth
+	}
+
+	zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; unexpected result type"))
+	return false
 }

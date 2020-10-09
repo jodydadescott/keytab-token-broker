@@ -27,10 +27,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jodydadescott/keytab-token-broker/internal/keytab"
-	"github.com/jodydadescott/keytab-token-broker/internal/nonce"
-	"github.com/jodydadescott/keytab-token-broker/internal/policy"
-	"github.com/jodydadescott/keytab-token-broker/internal/token"
+	"github.com/jodydadescott/tokens2keytabs/internal/keytab"
+	"github.com/jodydadescott/tokens2keytabs/internal/nonce"
+	"github.com/jodydadescott/tokens2keytabs/internal/policy"
+	"github.com/jodydadescott/tokens2keytabs/internal/token"
 	"go.uber.org/zap"
 )
 
@@ -105,7 +105,6 @@ func (config *Config) Build() (*Server, error) {
 	}
 
 	policyConfig := &policy.Config{
-		Query:  config.Query,
 		Policy: config.Policy,
 	}
 	policy, err := policyConfig.Build()
@@ -202,22 +201,14 @@ func (t *Server) newNonce(ctx context.Context, tokenString string) (*nonce.Nonce
 	}
 
 	// Validate that token is allowed to pull nonce
-	decision, err := t.policy.RenderDecision(ctx, xtoken.Claims)
-	if err != nil {
-		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[err=%s]", tokenString, err))
-		return nil, ErrAuthFail
+	if t.policy.AuthGetNonce(ctx, xtoken.Claims) {
+		nonce := t.nonceCache.NewNonce()
+		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[%s]", tokenString, nonce.Value))
+		return nonce, nil
 	}
 
-	if !decision.Auth {
-		err = fmt.Errorf("Authorization denied")
-		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[err=%s]", tokenString, err))
-		return nil, ErrAuthFail
-	}
-
-	nonce := t.nonceCache.NewNonce()
-
-	zap.L().Debug(fmt.Sprintf("newNonce(%s)->[%s]", tokenString, nonce.Value))
-	return nonce, nil
+	zap.L().Debug(fmt.Sprintf("newNonce(%s)->[auth denied by policy]", tokenString))
+	return nil, ErrAuthFail
 }
 
 func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keytab.Keytab, error) {
@@ -254,32 +245,22 @@ func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keyta
 		return nil, ErrAuthFail
 	}
 
-	decision, err := t.policy.RenderDecision(ctx, xtoken.Claims)
-	if err != nil {
-		zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Denied:Fail : err=%s", shortToken, principal, err))
-		return nil, ErrAuthFail
+	if t.policy.AuthGetKeytab(ctx, xtoken.Claims, nonce.Value, principal) {
+
+		keytab := t.keytabCache.GetKeytab(principal)
+
+		if keytab == nil {
+			zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Denied:Fail : err=%s", shortToken, principal, err))
+			return nil, ErrNotFound
+		}
+
+		zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Granted", shortToken, principal))
+		return keytab, nil
+
 	}
 
-	if !decision.Auth {
-		err = fmt.Errorf("Authorization denied")
-		zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Denied:Decision [Auth] : err=%s", shortToken, principal, err))
-		return nil, ErrAuthFail
-	}
-
-	if !decision.HasPrincipal(principal) {
-		zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Denied:Decision [No matching principal] : err=%s", shortToken, principal, err))
-		return nil, ErrAuthFail
-	}
-
-	keytab := t.keytabCache.GetKeytab(principal)
-
-	if keytab == nil {
-		zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Denied:Fail : err=%s", shortToken, principal, err))
-		return nil, ErrNotFound
-	}
-
-	zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Granted", shortToken, principal))
-	return keytab, nil
+	zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Denied:Policy : err=%s", shortToken, principal, err))
+	return nil, ErrAuthFail
 
 }
 

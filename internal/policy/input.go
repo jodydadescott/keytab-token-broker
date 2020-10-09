@@ -16,21 +16,9 @@ limitations under the License.
 
 package policy
 
-// Decision ...
-type Decision struct {
-	Auth       bool
-	Principals []string
-}
-
-// HasPrincipal Returns true if principal is present in entity
-func (t *Decision) HasPrincipal(principal string) bool {
-	if principal == "" {
-		return false
-	}
-	for _, s := range t.Principals {
-		if s == principal {
-			return true
-		}
-	}
-	return false
+// Input Data structure sent to OPA / Rego for decison
+type Input struct {
+	Claims    interface{} `json:"claims,omitempty" yaml:"claims,omitempty"`
+	Principal string      `json:"principal,omitempty" yaml:"principal,omitempty"`
+	Nonce     string      `json:"nonce,omitempty" yaml:"nonce,omitempty"`
 }

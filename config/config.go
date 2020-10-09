@@ -18,7 +18,7 @@ type Config struct {
 
 // Network Config
 type Network struct {
-	Listen    string `json:"Listen,omitempty" yaml:"Listen,omitempty"`
+	Listen    string `json:"listen,omitempty" yaml:"listen,omitempty"`
 	HTTPPort  int    `json:"httpPort,omitempty" yaml:"httpPort,omitempty"`
 	HTTPSPort int    `json:"httpsPort,omitempty" yaml:"httpsPort,omitempty"`
 	TLSCert   string `json:"tlscert,omitempty" yaml:"tlscert,omitempty"`
@@ -27,7 +27,6 @@ type Network struct {
 
 // Policy Config
 type Policy struct {
-	Query          string `json:"query,omitempty" yaml:"query,omitempty"`
 	Policy         string `json:"policy,omitempty" yaml:"policy,omitempty"`
 	NonceLifetime  int    `json:"nonceLifetime,omitempty" yaml:"nonceLifetime,omitempty"`
 	KeytabLifetime int    `json:"keytabLifetime,omitempty" yaml:"keytabLifetime,omitempty"`
@@ -114,10 +113,6 @@ func (t *Config) Merge(config *Config) {
 
 		if t.Policy == nil {
 			t.Policy = &Policy{}
-		}
-
-		if config.Policy.Query != "" {
-			t.Policy.Query = config.Policy.Query
 		}
 
 		if config.Policy.Policy != "" {

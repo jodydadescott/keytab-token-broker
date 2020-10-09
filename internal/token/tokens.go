@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/jodydadescott/keytab-token-broker/internal/publickey"
+	"github.com/jodydadescott/tokens2keytabs/internal/publickey"
 	"go.uber.org/zap"
 )
 

@@ -28,8 +28,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jodydadescott/keytab-token-broker/config"
-	"github.com/jodydadescott/keytab-token-broker/internal/app"
+	"github.com/jodydadescott/tokens2keytabs/config"
+	"github.com/jodydadescott/tokens2keytabs/internal/app"
 	"github.com/open-policy-agent/opa/rego"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -70,7 +70,6 @@ func (t *ConfigLoader) ServerConfig() (*app.Config, error) {
 	}
 
 	if t.Config.Policy != nil {
-		serverConfig.Query = t.Config.Policy.Query
 		serverConfig.Policy = t.Config.Policy.Policy
 		serverConfig.Nonce.Lifetime = t.Config.Policy.NonceLifetime
 		serverConfig.Keytab.Lifetime = t.Config.Policy.KeytabLifetime

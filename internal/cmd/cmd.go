@@ -25,8 +25,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/jodydadescott/keytab-token-broker/config"
-	"github.com/jodydadescott/keytab-token-broker/internal/configloader"
+	"github.com/jodydadescott/tokens2keytabs/config"
+	"github.com/jodydadescott/tokens2keytabs/internal/configloader"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -96,12 +96,12 @@ var serviceContinueCmd = &cobra.Command{
 	},
 }
 
-var configCmd = &cobra.Command{
+var serviceConfigCmd = &cobra.Command{
 	Use:   "config",
 	Short: "manage configuration",
 }
 
-var configSetCmd = &cobra.Command{
+var serviceConfigSetCmd = &cobra.Command{
 	Use:   "set",
 	Short: "set configuration",
 
@@ -122,7 +122,7 @@ var configSetCmd = &cobra.Command{
 	},
 }
 
-var configShowCmd = &cobra.Command{
+var serviceConfigShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "show config",
 
@@ -134,6 +134,11 @@ var configShowCmd = &cobra.Command{
 		fmt.Println(config)
 		return nil
 	},
+}
+
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "make config or config example",
 }
 
 var configExampleCmd = &cobra.Command{
@@ -203,7 +208,7 @@ var configMakeCmd = &cobra.Command{
 	},
 }
 
-var runDebugCmd = &cobra.Command{
+var windowsRunDebugCmd = &cobra.Command{
 	Use:   "run-debug",
 	Short: "run debug (non service)",
 
@@ -342,12 +347,17 @@ func Execute() {
 func init() {
 
 	if runtime.GOOS == "windows" {
-		serviceCmd.AddCommand(serviceInstallCmd, serviceRemoveCmd, serviceStartCmd, serviceStopCmd, servicePauseCmd, serviceContinueCmd)
-		configCmd.AddCommand(configSetCmd, configShowCmd, configMakeCmd, configExampleCmd)
-		rootCmd.AddCommand(serviceCmd, configCmd, runDebugCmd)
+
+		serviceConfigCmd.AddCommand(serviceConfigSetCmd, serviceConfigShowCmd, configMakeCmd)
+		serviceCmd.AddCommand(serviceInstallCmd, serviceRemoveCmd, serviceStartCmd, serviceStopCmd, servicePauseCmd, serviceContinueCmd, serviceConfigCmd)
+		configCmd.AddCommand(configExampleCmd, configMakeCmd)
+		rootCmd.AddCommand(serviceCmd, serviceConfigCmd, windowsRunDebugCmd)
+
 	} else {
+
 		configCmd.AddCommand(configMakeCmd, configExampleCmd)
 		rootCmd.AddCommand(configCmd, serverCmd)
+
 	}
 
 	// Server

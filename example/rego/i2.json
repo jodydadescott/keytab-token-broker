@@ -1,0 +1,14 @@
+{
+  "claims": {
+    "alg": "EC",
+    "kid": "donut",
+    "iss": "invalid",
+    "exp": 1599844897,
+    "aud": "daisy",
+    "service": {
+      "keytab": "user1@example.com,user2@example.com"
+    }
+  },
+  "principal": "user1@example.com",
+  "nonce": "daisy"
+}

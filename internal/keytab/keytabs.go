@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jodydadescott/keytab-token-broker/internal/timeperiod"
+	"github.com/jodydadescott/tokens2keytabs/internal/timeperiod"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"go.uber.org/zap"

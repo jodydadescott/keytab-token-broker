@@ -24,45 +24,60 @@ import (
 
 func Test1(t *testing.T) {
 
-	exampleToken := `
-{
-	"service": {
-	  "@cloud:aws:ami-id": "ami-098f16afa9edf40be",
-	  "ilove": "the80s",
-	  "keytab": "principal1@EXAMPLE.COM, principal2@EXAMPLE.COM"
-	},
-	"aud": "initial",
-	"exp": 1601482326,
-	"iat": 1601478726,
-	"iss": "https://api.console.aporeto.com/v/1/namespaces/5ddc396b9facec0001d3c886/oauthinfo",
-	"sub": "5f7495d9a2057f00012669a0"
-  }
-`
-
-	var input interface{}
-
-	// Unmarshal or Decode the JSON to the interface.
-	json.Unmarshal([]byte(exampleToken), &input)
-
-	exampleQuery := "auth = data.kbridge.auth; data.kbridge.principals[principals]"
-
 	examplePolicy := `
-	package kbridge
-		
-	default auth = false
-	
-	auth {
-		input.iss == "https://api.console.aporeto.com/v/1/namespaces/5ddc396b9facec0001d3c886/oauthinfo"
-	}
-	
-	principals[grant] {
-		grant := split(input.service.keytab,",")
-	}
-	
+    package main
+
+    default auth_get_nonce = false
+    default auth_get_keytab = false
+
+    auth_base {
+       # Here we match that the token issuer is an authorized issuer
+       input.claims.iss == "abc123"
+    }
+
+    auth_get_nonce {
+      # For now all we are doing is calling auth_base. This could be expanded as needed.
+       auth_base
+    }
+
+    auth_nonce {
+       # To prevent replay attack we compare the nonce from the user with the nonce in
+       # the token claims. Here we expect the nonce from the user to match the audience
+       # (aud) field. If our token issuer uses a different claim we will need to adjust
+       # as necessary.
+       input.claims.aud == input.nonce
+    }
+
+    auth_get_keytab {
+       # Here we auth the principals requested by the user. We use claims from the token
+       # provider to determine is the bearer should be authorized. Our token provider has
+       # the authorized principals in a comma delineated string under the string array
+       # service which is under the claims. We split the comma string into a set and
+       # check for a match
+       auth_base
+       split(input.claims.service.keytab,",")[_] == input.principal
+    }
 	`
 
+	exampleInput := `
+	{
+		"alg": "EC",
+		"kid": "donut",
+		"iss": "abc123",
+		"exp": 1599844897,
+		"aud": "drpepper",
+		"service": {
+		  "keytab": "user1@example.com,user2@example.com"
+		}
+	  }
+	`
+
+	var claims map[string]interface{}
+
+	// Unmarshal or Decode the JSON to the interface.
+	json.Unmarshal([]byte(exampleInput), &claims)
+
 	config := &Config{
-		Query:  exampleQuery,
 		Policy: examplePolicy,
 	}
 
@@ -74,17 +89,13 @@ func Test1(t *testing.T) {
 		t.Errorf("Unexpected error:%s", err)
 	}
 
-	decision, err := policyEngine.RenderDecision(ctx, input)
-	if err != nil {
-		t.Errorf("Unexpected error:%s", err)
+	if !policyEngine.AuthGetNonce(ctx, claims) {
+		t.Errorf("AuthGetNonce should be true")
 	}
 
-	if decision.Auth != true {
-		t.Errorf("GetNonce should be true")
-	}
-
-	if !decision.HasPrincipal("principal1@EXAMPLE.COM") {
-		t.Errorf("Principal should exist")
+	// AuthGetKeytab(ctx context.Context, claims map[string]interface{}, nonce string, principals []string)
+	if !policyEngine.AuthGetKeytab(ctx, claims, "drpepper", "user1@example.com") {
+		t.Errorf("AuthGetNonce should be true")
 	}
 
 }
