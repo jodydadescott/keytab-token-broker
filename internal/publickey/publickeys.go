@@ -34,10 +34,10 @@ import (
 )
 
 const (
-	defaultCacheRefreshInterval     int = 300
-	defaultPublicKeyidleConnections     = 4
-	defaultPublicKeyRequestTimeout      = 60
-	publicKeyLifetime                   = 86400
+	defaultCacheRefreshInterval int = 300
+	defaultIdleConnections          = 4
+	defaultRequestTimeout           = 60
+	defaultKeyLifetime              = 86400
 )
 
 var (
@@ -66,8 +66,8 @@ func (config *Config) Build() (*PublicKeys, error) {
 	zap.L().Debug("PublicKeys Starting")
 
 	cacheRefreshInterval := defaultCacheRefreshInterval
-	publicKeyRequestTimeout := defaultPublicKeyRequestTimeout
-	publicKeyidleConnections := defaultPublicKeyidleConnections
+	publicKeyRequestTimeout := defaultRequestTimeout
+	publicKeyidleConnections := defaultIdleConnections
 
 	if config.CacheRefreshInterval > 0 {
 		cacheRefreshInterval = config.CacheRefreshInterval
@@ -359,7 +359,7 @@ func newKeyEC(jwk *jwk) (*PublicKey, error) {
 			X:     new(big.Int).SetBytes(byteX),
 			Y:     new(big.Int).SetBytes(byteY),
 		},
-		Exp: time.Now().Unix() + int64(publicKeyLifetime),
+		Exp: time.Now().Unix() + int64(defaultKeyLifetime),
 		Kty: jwk.Kty,
 		Kid: jwk.Kid,
 	}, nil
