@@ -29,13 +29,13 @@ const (
 	charset = "abcdefghijklmnopqrstuvwxyz" +
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-	defaultCacheRefreshInterval int = 30
-	defaultLifetime             int = 60
+	defaultCacheRefreshInterval = time.Duration(30) * time.Second
+	defaultLifetime             = time.Duration(60) * time.Second
 )
 
 // Config Config
 type Config struct {
-	CacheRefreshInterval, Lifetime int
+	CacheRefreshInterval, Lifetime time.Duration
 }
 
 // Nonces Manages nonces. For our purposes a nonce is defined as a random
@@ -73,7 +73,7 @@ func (config *Config) Build() (*Nonces, error) {
 	t := &Nonces{
 		internal: make(map[string]*Nonce),
 		closed:   make(chan struct{}),
-		ticker:   time.NewTicker(time.Duration(cacheRefreshInterval) * time.Second),
+		ticker:   time.NewTicker(cacheRefreshInterval),
 		wg:       sync.WaitGroup{},
 		lifetime: int64(lifetime),
 		seededRand: rand.New(

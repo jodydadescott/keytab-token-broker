@@ -34,10 +34,10 @@ import (
 )
 
 const (
-	defaultCacheRefreshInterval int = 300
-	defaultIdleConnections          = 4
-	defaultRequestTimeout           = 60
-	defaultKeyLifetime              = 86400
+	defaultCacheRefreshInterval = time.Duration(5) * time.Minute
+	defaultIdleConnections      = 4
+	defaultRequestTimeout       = 60
+	defaultKeyLifetime          = 86400
 )
 
 var (
@@ -47,7 +47,8 @@ var (
 
 // Config The config
 type Config struct {
-	CacheRefreshInterval, RequestTimeout, IdleConnections int
+	CacheRefreshInterval            time.Duration
+	RequestTimeout, IdleConnections int
 }
 
 // PublicKeys ...
@@ -84,7 +85,7 @@ func (config *Config) Build() (*PublicKeys, error) {
 	t := &PublicKeys{
 		internal: make(map[string]*PublicKey),
 		closed:   make(chan struct{}),
-		ticker:   time.NewTicker(time.Duration(cacheRefreshInterval) * time.Second),
+		ticker:   time.NewTicker(cacheRefreshInterval),
 		wg:       sync.WaitGroup{},
 		httpClient: &http.Client{
 			Transport: &http.Transport{

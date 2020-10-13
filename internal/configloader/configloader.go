@@ -72,7 +72,7 @@ func (t *ConfigLoader) ServerConfig() (*app.Config, error) {
 	if t.Config.Policy != nil {
 		serverConfig.Policy = t.Config.Policy.Policy
 		serverConfig.Nonce.Lifetime = t.Config.Policy.NonceLifetime
-		serverConfig.Keytab.Lifetime = time.Duration(t.Config.Policy.KeytabLifetime) * time.Second
+		serverConfig.Keytab.Lifetime = t.Config.Policy.KeytabLifetime
 		serverConfig.Keytab.Seed = t.Config.Policy.Seed
 	}
 

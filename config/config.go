@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/jinzhu/copier"
 	"gopkg.in/yaml.v2"
@@ -27,10 +28,10 @@ type Network struct {
 
 // Policy Config
 type Policy struct {
-	Policy         string `json:"policy,omitempty" yaml:"policy,omitempty"`
-	NonceLifetime  int    `json:"nonceLifetime,omitempty" yaml:"nonceLifetime,omitempty"`
-	KeytabLifetime int    `json:"keytabLifetime,omitempty" yaml:"keytabLifetime,omitempty"`
-	Seed           string `json:"seed,omitempty" yaml:"seed,omitempty"`
+	Policy         string        `json:"policy,omitempty" yaml:"policy,omitempty"`
+	NonceLifetime  time.Duration `json:"nonceLifetime,omitempty" yaml:"nonceLifetime,omitempty"`
+	KeytabLifetime time.Duration `json:"keytabLifetime,omitempty" yaml:"keytabLifetime,omitempty"`
+	Seed           string        `json:"seed,omitempty" yaml:"seed,omitempty"`
 }
 
 // Logging Config

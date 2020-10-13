@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"time"
 
 	"gopkg.in/yaml.v2"
 )
@@ -82,8 +83,8 @@ func NewV1ExampleConfig() *Config {
 		},
 		Policy: &Policy{
 			Policy:         examplePolicy,
-			NonceLifetime:  60,
-			KeytabLifetime: 60,
+			NonceLifetime:  time.Duration(60) * time.Second,
+			KeytabLifetime: time.Duration(60) * time.Second,
 			Seed:           "this is not a good seed",
 		},
 		Logging: &Logging{

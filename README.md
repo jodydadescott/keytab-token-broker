@@ -156,7 +156,7 @@ policy:
   #
   # This is a OPA/Rego Policy. It must have the package name main and expose
   # the boolean functions auth_get_nonce and auth_get_keytab.
-  # 
+  #
   # The input format structure has claims []string, principal and nonce string.
   #
   policy: |2
@@ -193,16 +193,10 @@ policy:
        auth_base
        split(input.claims.service.keytab,",")[_] == input.principal
     }
-  # This is the lifetime of the nonce. When a new nonce is created its valid live
-  # will be Unix epoch seconds of creation time plus this value. If set it must be
-  # zero or greater. If it is set to zero or left unset it will be set to the default
-  # of 60 seconds.
-  nonceLifetime: 60
+  # This is the lifetime of a Nonce. The format is Golang time.Duration.
+  nonceLifetime: 1m0s
 
-  # This is the lifetime of a keytab in seconds. This is determined by calculating the
-  # periods since epoch of this value. The life starts at the top of each period and ends
-  # at the next periods beginning. If it is set to zero or left unset it will be set to
-  # the default of 60 seconds.
+  # This is the lifetime of a Keytab. The format is Golang time.Duration.
   keytabLifetime: 60
 
   # This is the random seed that principal passwords are derived from. This must be kept
@@ -217,21 +211,22 @@ logging:
   logFormat: json
 
   # The outputPaths and errorOutputPaths should be one or more of stderr, stdout, and/or
-  # file. By default it is stderr. Note that on Windows when running as a service events 
+  # file. By default it is stderr. Note that on Windows when running as a service events
   # will be sent to the Windows event logger irregardless of this setting.
   outputPaths:
-  - stderr
+    - stderr
   errorOutputPaths:
-  - stderr
+    - stderr
 data:
   # This is the set or principals that Keytabs will be issued for. These principals
   # should already exist on the target domain.
   principals:
-  - superman@EXAMPLE.COM
-  - birdman@EXAMPLE.COM
+    - superman@EXAMPLE.COM
+    - birdman@EXAMPLE.COM
 ```
 
 For testing a selfsigned cert can be generated with the following commands
+
 ```bash
 openssl ecparam -genkey -name secp384r1 -out server.key
 openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650

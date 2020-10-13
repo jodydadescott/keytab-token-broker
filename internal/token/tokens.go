@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	defaultCacheRefreshInterval int = 30
-	maxCacheRefreshInterval         = 3600
+	maxCacheRefreshInterval     = 3600
+	defaultCacheRefreshInterval = time.Duration(30) * time.Second
 )
 
 var (
@@ -42,7 +42,7 @@ var (
 
 // Config The config
 type Config struct {
-	CacheRefreshInterval int
+	CacheRefreshInterval time.Duration
 }
 
 // Tokens ...
@@ -76,7 +76,7 @@ func (config *Config) Build() (*Tokens, error) {
 	t := &Tokens{
 		internal:   make(map[string]*Token),
 		closed:     make(chan struct{}),
-		ticker:     time.NewTicker(time.Duration(cacheRefreshInterval) * time.Second),
+		ticker:     time.NewTicker(cacheRefreshInterval),
 		wg:         sync.WaitGroup{},
 		publicKeys: publicKeys,
 	}
