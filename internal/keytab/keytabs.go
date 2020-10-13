@@ -31,11 +31,8 @@ import (
 )
 
 var (
-	principalRegex = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
-)
-
-const (
-	defaultLifetime = 300
+	principalRegex  = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+	defaultLifetime = time.Duration(5) * time.Minute
 )
 
 // Config Configuration
@@ -48,7 +45,7 @@ const (
 type Config struct {
 	Seed       string
 	Principals []string
-	Lifetime   int
+	Lifetime   time.Duration
 }
 
 // Keytabs holds and manages Kerberos Keytabs. Keytabs are generated or
@@ -106,12 +103,6 @@ func (config *Config) Build() (*Keytabs, error) {
 		lifetime = config.Lifetime
 	}
 
-	timePeriodConfig := &timeperiod.Config{
-		Seconds: lifetime,
-	}
-
-	timePeriod, err := timePeriodConfig.Build()
-
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +115,7 @@ func (config *Config) Build() (*Keytabs, error) {
 		ticker:        time.NewTicker(time.Second),
 		internal:      make(map[string]*Keytab),
 		seed:          base32.StdEncoding.EncodeToString([]byte(config.Seed)),
-		timePeriod:    timePeriod,
+		timePeriod:    timeperiod.NewPeriod(lifetime),
 	}
 
 	if err != nil {
@@ -167,13 +158,13 @@ func (config *Config) Build() (*Keytabs, error) {
 	}()
 
 	now := getTime()
-	diff := t.timePeriod.Next(now).Sub(now).Seconds()
+	diff := t.timePeriod.From(now).Next().Time().Sub(now).Seconds()
 
 	// zap.L().Debug(fmt.Sprintf("Period->Now:%s, PeriodNow:%s, PeriodNext: %s", now, timePeriod.Now(now), timePeriod.Next(now)))
 
 	if diff > 30 {
 		zap.L().Debug(fmt.Sprintf("The next Keytab renew is in %f seconds; calling keymmaker now", diff))
-		t.runKeymaker <- timePeriod.Now(now)
+		t.runKeymaker <- t.timePeriod.From(now).Time()
 
 	} else {
 		zap.L().Debug(fmt.Sprintf("The next Keytab renew is in %f seconds; will let the ticker call keymaker when time", diff))
@@ -183,7 +174,7 @@ func (config *Config) Build() (*Keytabs, error) {
 		zap.L().Debug("Starting Ticker")
 		t.wg.Add(1)
 
-		next := timePeriod.Next(now)
+		next := t.timePeriod.From(now).Next().Time()
 
 		for {
 			select {
@@ -195,8 +186,8 @@ func (config *Config) Build() (*Keytabs, error) {
 				// This fires every second
 				now := getTime()
 				if now.Equal(next) || now.After(next) {
-					next = timePeriod.Next(now)
-					t.runKeymaker <- timePeriod.Now(now)
+					next = t.timePeriod.From(now).Next().Time()
+					t.runKeymaker <- t.timePeriod.From(now).Time()
 				}
 			}
 		}

@@ -1,52 +1,83 @@
+/*
+Copyright © 2020 Jody Scott <jody@thescottsweb.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package timeperiod
 
-import (
-	"fmt"
-	"time"
-)
+import "time"
 
-// Config Configuration
-type Config struct {
-	// Seconds in period. Must be greater then zero and even
-	Seconds int
-}
+// Example
+// epochPeriod := NewPeriod(time.Duration(2) * time.Hour)
+// now := time.Date(2022, 1, 19, 18, 13, 0, 0, time.UTC)
+// nowPeriod := epochPeriod.From(now)
+// nextPeriod := nowPeriod.Next()
+// prePeriod := nowPeriod.Prev()
 
-// TimePeriod Provides synchrnous time periods based on epoch seconds and
-// period interval seconds
+// TimePeriod Period of time defined by duration and epoch where epoch is the
+// start of the TimePeriod
 type TimePeriod struct {
-	seconds int64
+	Duration time.Duration
+	Epoch    int64
 }
 
-// Build Returns new instance from comfig
-func (c *Config) Build() (*TimePeriod, error) {
-
-	if c.Seconds <= 0 || c.Seconds%2 != 0 {
-		return nil, fmt.Errorf(fmt.Sprintf("TimePeriod Seconds %d is invalid, must be greater then zero and even", c.Seconds))
+// NewPeriod Returns first Period from epoch with provided duration
+func NewPeriod(duration time.Duration) *TimePeriod {
+	return &TimePeriod{
+		Duration: duration,
+		Epoch:    0,
 	}
+}
+
+// Next Returns first Period after current
+func (t *TimePeriod) Next() *TimePeriod {
+	return &TimePeriod{
+		Duration: t.Duration,
+		Epoch:    t.Epoch + int64(t.Duration.Seconds()),
+	}
+}
+
+// Prev Returns First Period before current
+func (t *TimePeriod) Prev() *TimePeriod {
+	// Once we hit 0 or Jan 1 1970 we can not go back anymore so we just keep
+	// returning Jan 1 1970
+	epoch := t.Epoch - int64(t.Duration.Seconds())
+	if epoch < 0 {
+		epoch = 0
+	}
+	return &TimePeriod{
+		Duration: t.Duration,
+		Epoch:    epoch,
+	}
+}
+
+// Time Returns period time where time is the top of the period
+func (t *TimePeriod) Time() time.Time {
+	return time.Unix(t.Epoch, 0)
+}
+
+// From Returns Period period that contains provided time
+func (t *TimePeriod) From(input time.Time) *TimePeriod {
+	// Determine number of seconds time is from top of current period and subtract
+	// them hence top of period
+	epoch := input.Unix()
+	s := int64(t.Duration.Seconds())
+	_, remainderSeconds := epoch/s, epoch%s
+	epoch = epoch - remainderSeconds
 
 	return &TimePeriod{
-		seconds: int64(c.Seconds),
-	}, nil
-}
-
-// Now returns current top of period for provided time
-func (t *TimePeriod) Now(input time.Time) time.Time {
-	nowSeconds := input.Unix()
-	timePeriodSeconds := int64(t.seconds)
-	_, remainderSeconds := nowSeconds/timePeriodSeconds, nowSeconds%timePeriodSeconds
-	return time.Unix(nowSeconds-remainderSeconds, 0).In(input.Location())
-}
-
-// Next returns next top of period for provided time
-func (t *TimePeriod) Next(input time.Time) time.Time {
-	nowSeconds := input.Unix()
-	_, remainderSeconds := nowSeconds/t.seconds, nowSeconds%t.seconds
-	return time.Unix(nowSeconds-remainderSeconds+t.seconds, 0).In(input.Location())
-}
-
-// Prev returns previous top of period for provided time
-func (t *TimePeriod) Prev(input time.Time) time.Time {
-	nowSeconds := input.Unix()
-	_, remainderSeconds := nowSeconds/t.seconds, nowSeconds%t.seconds
-	return time.Unix(nowSeconds-remainderSeconds-t.seconds, 0).In(input.Location())
+		Duration: t.Duration,
+		Epoch:    epoch,
+	}
 }

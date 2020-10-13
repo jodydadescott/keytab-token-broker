@@ -24,80 +24,78 @@ import (
 
 func Test1(t *testing.T) {
 
-	{
-		c := &Config{
-			Seconds: 3601,
-		}
+	epochPeriod := NewPeriod(time.Duration(2) * time.Minute)
+	now := time.Date(2020, 3, 12, 14, 10, 0, 0, time.UTC)
+	nowPeriod := epochPeriod.From(now)
+	nextPeriod := nowPeriod.Next()
+	prePeriod := nowPeriod.Prev()
 
-		_, err := c.Build()
+	pnow := fmt.Sprintf("%s", time.Unix(nowPeriod.Epoch, 0))
+	pnext := fmt.Sprintf("%s", time.Unix(nextPeriod.Epoch, 0))
+	pprev := fmt.Sprintf("%s", time.Unix(prePeriod.Epoch, 0))
 
-		if err == nil {
-			t.Fatalf("not expected")
-		}
+	if pnow != "2020-03-12 09:10:00 -0500 CDT" {
+		t.Fatalf("Period now fail")
 	}
 
-	{
-		c := &Config{
-			Seconds: 0,
-		}
-
-		_, err := c.Build()
-
-		if err == nil {
-			t.Fatalf("not expected")
-		}
+	if pnext != "2020-03-12 09:12:00 -0500 CDT" {
+		t.Fatalf("Period next fail")
 	}
 
-	{
-		c := &Config{
-			Seconds: -1,
-		}
-
-		_, err := c.Build()
-
-		if err == nil {
-			t.Fatalf("not expected")
-		}
-	}
-
-	{
-		c := &Config{
-			Seconds: 128,
-		}
-
-		_, err := c.Build()
-
-		if err != nil {
-			t.Fatalf("not expected")
-		}
+	if pprev != "2020-03-12 09:08:00 -0500 CDT" {
+		t.Fatalf("Period prev fail")
 	}
 
 }
 
 func Test2(t *testing.T) {
 
-	now := time.Date(2020, 3, 12, 14, 10, 0, 0, time.UTC)
+	epochPeriod := NewPeriod(time.Duration(12) * time.Minute)
+	now := time.Date(2022, 1, 12, 18, 10, 0, 0, time.UTC)
+	nowPeriod := epochPeriod.From(now)
+	nextPeriod := nowPeriod.Next()
+	prePeriod := nowPeriod.Prev()
 
-	c := &Config{
-		Seconds: 3600,
+	pnow := fmt.Sprintf("%s", time.Unix(nowPeriod.Epoch, 0))
+	pnext := fmt.Sprintf("%s", time.Unix(nextPeriod.Epoch, 0))
+	pprev := fmt.Sprintf("%s", time.Unix(prePeriod.Epoch, 0))
+
+	if pnow != "2022-01-12 12:00:00 -0600 CST" {
+		t.Fatalf("Period now fail")
 	}
 
-	timePeriod, _ := c.Build()
-
-	nowPeriod := timePeriod.Now(now)
-	nextPeriod := timePeriod.Next(now)
-	prevPeriod := timePeriod.Prev(now)
-
-	if fmt.Sprintf("%s", nowPeriod) != "2020-03-12 14:00:00 +0000 UTC" {
-		t.Fatalf("nowPeriod is incorrect")
+	if pnext != "2022-01-12 12:12:00 -0600 CST" {
+		t.Fatalf("Period next fail")
 	}
 
-	if fmt.Sprintf("%s", prevPeriod) != "2020-03-12 13:00:00 +0000 UTC" {
-		t.Fatalf("prevPeriod is incorrect")
+	if pprev != "2022-01-12 11:48:00 -0600 CST" {
+		t.Fatalf("Period prev fail")
 	}
 
-	if fmt.Sprintf("%s", nextPeriod) != "2020-03-12 15:00:00 +0000 UTC" {
-		t.Fatalf("nextPeriod is incorrect")
+}
+
+func Test3(t *testing.T) {
+
+	epochPeriod := NewPeriod(time.Duration(2) * time.Hour)
+	now := time.Date(2022, 1, 19, 18, 13, 0, 0, time.UTC)
+	nowPeriod := epochPeriod.From(now)
+	nextPeriod := nowPeriod.Next()
+	prePeriod := nowPeriod.Prev()
+
+	pnow := fmt.Sprintf("%s", time.Unix(nowPeriod.Epoch, 0))
+	pnext := fmt.Sprintf("%s", time.Unix(nextPeriod.Epoch, 0))
+	pprev := fmt.Sprintf("%s", time.Unix(prePeriod.Epoch, 0))
+
+	if pnow != "2022-01-19 12:00:00 -0600 CST" {
+		t.Fatalf("Period now fail")
+	}
+
+	if pnext != "2022-01-19 14:00:00 -0600 CST" {
+		t.Fatalf("Period next fail")
+	}
+
+	if pprev != "2022-01-19 10:00:00 -0600 CST" {
+		t.Fatalf("Period prev fail")
 	}
 
 }
