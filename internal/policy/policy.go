@@ -67,12 +67,12 @@ func (t *Policy) AuthGetNonce(ctx context.Context, claims map[string]interface{}
 	results, err := t.query.Eval(ctx, rego.EvalInput(input))
 
 	if err != nil {
-		zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; err->%s", err))
+		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; err->%s", err))
 		return false
 	}
 
 	if len(results) == 0 {
-		zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; results are empty"))
+		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; results are empty"))
 		return false
 	}
 
@@ -83,7 +83,7 @@ func (t *Policy) AuthGetNonce(ctx context.Context, claims map[string]interface{}
 		return auth
 	}
 
-	zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; unexpected result type"))
+	zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; unexpected result type"))
 	return false
 }
 
@@ -99,12 +99,12 @@ func (t *Policy) AuthGetKeytab(ctx context.Context, claims map[string]interface{
 	results, err := t.query.Eval(ctx, rego.EvalInput(input))
 
 	if err != nil {
-		zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; err->%s", err))
+		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; err->%s", err))
 		return false
 	}
 
 	if len(results) == 0 {
-		zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; results are empty"))
+		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; results are empty"))
 		return false
 	}
 
@@ -113,6 +113,6 @@ func (t *Policy) AuthGetKeytab(ctx context.Context, claims map[string]interface{
 		return auth
 	}
 
-	zap.L().Error(fmt.Sprintf("Unexpected error on Rego pilicy execution; unexpected result type"))
+	zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; unexpected result type"))
 	return false
 }
