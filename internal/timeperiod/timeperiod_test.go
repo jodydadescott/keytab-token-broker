@@ -99,3 +99,20 @@ func Test3(t *testing.T) {
 	}
 
 }
+
+func Test4(t *testing.T) {
+
+	epochPeriod := NewPeriod(time.Duration(1) * time.Hour).From(time.Date(2022, 1, 19, 18, 0, 0, 0, time.UTC))
+
+	upper := time.Date(2022, 1, 19, 18, 27, 0, 0, time.UTC)
+	lower := time.Date(2022, 1, 19, 18, 44, 0, 0, time.UTC)
+
+	if epochPeriod.HalfLife(upper) {
+		t.Fatalf("not expected")
+	}
+
+	if !epochPeriod.HalfLife(lower) {
+		t.Fatalf("not expected")
+	}
+
+}

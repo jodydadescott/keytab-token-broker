@@ -81,3 +81,11 @@ func (t *TimePeriod) From(input time.Time) *TimePeriod {
 		Epoch:    epoch,
 	}
 }
+
+// HalfLife true if TimePeriod has reached half life
+func (t *TimePeriod) HalfLife(input time.Time) bool {
+	if input.Unix()-t.Epoch > int64(t.Duration.Seconds())/2 {
+		return true
+	}
+	return false
+}
