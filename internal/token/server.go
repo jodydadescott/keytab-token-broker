@@ -45,18 +45,18 @@ type Config struct {
 	CacheRefreshInterval time.Duration
 }
 
-// Tokens ...
-type Tokens struct {
+// Server ...
+type Server struct {
 	mutex      sync.RWMutex
 	internal   map[string]*Token
 	closed     chan struct{}
 	ticker     *time.Ticker
 	wg         sync.WaitGroup
-	publicKeys *publickey.PublicKeys
+	publicKeys *publickey.Server
 }
 
 // Build Returns a new Token Cache
-func (config *Config) Build() (*Tokens, error) {
+func (config *Config) Build() (*Server, error) {
 
 	zap.L().Debug("Starting Token Cache")
 
@@ -73,7 +73,7 @@ func (config *Config) Build() (*Tokens, error) {
 		return nil, err
 	}
 
-	t := &Tokens{
+	t := &Server{
 		internal:   make(map[string]*Token),
 		closed:     make(chan struct{}),
 		ticker:     time.NewTicker(cacheRefreshInterval),
@@ -100,7 +100,7 @@ func (config *Config) Build() (*Tokens, error) {
 
 }
 
-func (t *Tokens) processCache() {
+func (t *Server) processCache() {
 
 	zap.L().Debug("Processing cache start")
 
@@ -129,7 +129,7 @@ func (t *Tokens) processCache() {
 }
 
 // GetToken ...
-func (t *Tokens) GetToken(token string) (*Token, error) {
+func (t *Server) GetToken(token string) (*Token, error) {
 
 	if token == "" {
 		zap.L().Warn("request for empty token")
@@ -253,7 +253,7 @@ func (t *Tokens) GetToken(token string) (*Token, error) {
 }
 
 // Shutdown Cache
-func (t *Tokens) Shutdown() {
+func (t *Server) Shutdown() {
 	close(t.closed)
 	t.wg.Wait()
 }

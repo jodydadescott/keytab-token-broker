@@ -68,8 +68,8 @@ type Config struct {
 type Server struct {
 	closed                  chan struct{}
 	wg                      sync.WaitGroup
-	tokenCache              *token.Tokens
-	keytabCache             *keytab.Keytabs
+	tokenCache              *token.Server
+	keytabCache             *keytab.Server
 	nonceCache              *nonce.Nonces
 	secret                  *secret.Server
 	httpServer, httpsServer *http.Server

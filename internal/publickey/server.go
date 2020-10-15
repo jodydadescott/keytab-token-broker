@@ -51,8 +51,8 @@ type Config struct {
 	RequestTimeout, IdleConnections int
 }
 
-// PublicKeys ...
-type PublicKeys struct {
+// Server ...
+type Server struct {
 	httpClient *http.Client
 	mutex      sync.RWMutex
 	internal   map[string]*PublicKey
@@ -62,9 +62,9 @@ type PublicKeys struct {
 }
 
 // Build Returns a new Token Cache
-func (config *Config) Build() (*PublicKeys, error) {
+func (config *Config) Build() (*Server, error) {
 
-	zap.L().Debug("PublicKeys Starting")
+	zap.L().Debug("Server Starting")
 
 	cacheRefreshInterval := defaultCacheRefreshInterval
 	requestTimeout := defaultRequestTimeout
@@ -82,7 +82,7 @@ func (config *Config) Build() (*PublicKeys, error) {
 		idleConnections = config.IdleConnections
 	}
 
-	t := &PublicKeys{
+	t := &Server{
 		internal: make(map[string]*PublicKey),
 		closed:   make(chan struct{}),
 		ticker:   time.NewTicker(cacheRefreshInterval),
@@ -100,7 +100,7 @@ func (config *Config) Build() (*PublicKeys, error) {
 		for {
 			select {
 			case <-t.closed:
-				zap.L().Debug("PublicKeys Stopping")
+				zap.L().Debug("Server Stopping")
 				t.wg.Done()
 				return
 			case <-t.ticker.C:
@@ -114,7 +114,7 @@ func (config *Config) Build() (*PublicKeys, error) {
 
 }
 
-func (t *PublicKeys) processCache() {
+func (t *Server) processCache() {
 
 	zap.L().Debug("Processing cache start")
 
@@ -144,7 +144,7 @@ func (t *PublicKeys) processCache() {
 
 // GetKey Returns PublicKey from cache if found. If not gets PublicKey from
 // validated issuer, stores in cache and returns copy
-func (t *PublicKeys) GetKey(iss, kid string) (*PublicKey, error) {
+func (t *Server) GetKey(iss, kid string) (*PublicKey, error) {
 
 	key := iss + ":" + kid
 
@@ -203,7 +203,7 @@ func (t *PublicKeys) GetKey(iss, kid string) (*PublicKey, error) {
 	return nil, ErrPublicKeyInvalid
 }
 
-func (t *PublicKeys) getOpenIDConfiguration(fqdn string) (*openIDConfiguration, error) {
+func (t *Server) getOpenIDConfiguration(fqdn string) (*openIDConfiguration, error) {
 
 	resp, err := t.httpClient.Get(fqdn)
 	if err != nil {
@@ -220,7 +220,7 @@ func (t *PublicKeys) getOpenIDConfiguration(fqdn string) (*openIDConfiguration, 
 	return openIDConfigurationFromJSON(b)
 }
 
-func (t *PublicKeys) getJWKs(fqdn string) (*jwks, error) {
+func (t *Server) getJWKs(fqdn string) (*jwks, error) {
 
 	resp, err := t.httpClient.Get(fqdn)
 	if err != nil {
@@ -368,7 +368,7 @@ func newKeyEC(jwk *jwk) (*PublicKey, error) {
 }
 
 // Shutdown Cache
-func (t *PublicKeys) Shutdown() {
+func (t *Server) Shutdown() {
 	close(t.closed)
 	t.wg.Wait()
 }
