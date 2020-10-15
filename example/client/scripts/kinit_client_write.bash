@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2059,SC2145
 ########################################################################################
 # Example Script showing how to get Keytab from Keytab Broker Server, mount CIFS
 # filesystem and write data
@@ -22,7 +23,7 @@
 ########################################################################################
 
 PRINCIPAL="superman@EXAMPLE.COM"
-KEYTAB_SERVER="35.153.18.49:8080"
+SERVER="35.153.18.49:8080"
 TOKEN_SERVER="169.254.254.1"
 
 NC='\033[0m'
@@ -37,18 +38,18 @@ function main() {
   which jq > /dev/null 2>&1 || { err "jq not found in path"; return 2; }
 
   [[ $PRINCIPAL ]] || { err "Missing env var PRINCIPAL"; return 2; }
-  [[ $KEYTAB_SERVER ]] || { err "Missing env var KEYTAB_SERVER"; return 2; }
+  [[ $SERVER ]] || { err "Missing env var SERVER"; return 2; }
   [[ $TOKEN_SERVER ]] || { err "Missing env var TOKENB_SERVER"; return 2; }
 
   tmp=$(mktemp -d)
   trap cleanup EXIT
 
-  tkinit || return $?
-  write_data || return $?
+  run || return $?
+  write || return $?
   return 0
 }
 
-function tkinit() {
+function run() {
   local token
   local nonce
 
@@ -62,7 +63,7 @@ function tkinit() {
   err
 
   log "${YELLOW}Get nonce with token from above->${NC}\n"
-  nonce=$(httpGet "${KEYTAB_SERVER}"/getnonce\?bearertoken="${token}") || {
+  nonce=$(httpGet "${SERVER}"/getnonce\?bearertoken="${token}") || {
     log_fail
     return 3
   }
@@ -79,11 +80,11 @@ function tkinit() {
   print_token "$token"
 
   log "${YELLOW}Get keytab with token from above and principal ${PURPLE}${PRINCIPAL}${YELLOW}->${NC}\n"
-  keytab=$(httpGet "${KEYTAB_SERVER}"/getkeytab\?bearertoken="${token}"\&principal="${PRINCIPAL}") || {
+  keytab=$(httpGet "${SERVER}"/getkeytab\?bearertoken="${token}"\&principal="${PRINCIPAL}") || {
     log_fail
     return 3
   }
-  echo $keytab | jq
+  echo "$keytab" | jq
 
   echo "$keytab" | jq -r '.base64file' | base64 -d > "$tmp/keytab"
   local principal_alias
@@ -97,7 +98,7 @@ function tkinit() {
   log_ok
 }
 
-function write_data() {
+function write() {
   log "${YELLOW}Mount Windows CIFS share with user ${PURPLE}${PRINCIPAL}${YELLOW}: ${NC}"
   sudo mount /data || { log_fail; return 3; }
   log_ok
@@ -130,7 +131,7 @@ function cleanup() { [[ "$tmp" ]] && rm -rf "$tmp"; }
 
 function print_token() {
   local data
-  data=$(echo $@ | cut -d "." -f 2 | base64 -d 2> /dev/null)
+  data=$(echo "$@" | cut -d "." -f 2 | base64 -d 2> /dev/null)
   [[ $data ]] || { err "Invalid Token"; return 3; }
 
   local first_char=${data:0:1}
@@ -145,7 +146,7 @@ function print_token() {
     data+="\"}"
   fi
 
-  echo $data | jq
+  echo "$data" | jq
 }
 
 err() { printf "$@\n" 1>&2; }
