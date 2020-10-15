@@ -53,7 +53,7 @@ function run() {
   err
 
   log "${YELLOW}Get nonce with token from above->${NC}\n"
-  nonce=$(httpGet "${SERVER}"/getnonce\?bearertoken="${token}") || {
+  nonce=$(httpGet -H "Authorization: Bearer $token" "${SERVER}/getnonce") || {
     log_fail
     return 3
   }
@@ -70,7 +70,7 @@ function run() {
   print_token "$token"
 
   log "${YELLOW}Get Secret using token from above and secret name ${PURPLE}${SECRET_NAME}${YELLOW}->${NC}\n"
-  secret=$(httpGet "${SERVER}"/getsecret\?bearertoken="${token}"\&name="${SECRET_NAME}") || {
+  secret=$(httpGet -H "Authorization: Bearer $token" "${SERVER}"/getsecret\?name="${SECRET_NAME}") || {
     log_fail
     return 3
   }

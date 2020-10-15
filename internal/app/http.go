@@ -19,6 +19,7 @@ package app
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"go.uber.org/zap"
 )
@@ -120,9 +121,15 @@ func handleERR(w http.ResponseWriter, err error) bool {
 }
 
 func getBearerToken(r *http.Request) string {
+	// If the Bearer token is present it may be in Authorization Header in the format 'Authorization: Bearer TOKEN' or as a parameter
 	token := r.Header.Get("Authorization")
 	if token != "" {
-		return token
+		tokenSlice := strings.Split(token, " ")
+		if len(tokenSlice) > 1 {
+			if strings.ToLower(tokenSlice[0]) == "bearer" {
+				return tokenSlice[1]
+			}
+		}
 	}
 	return getKey(r, "bearertoken")
 }

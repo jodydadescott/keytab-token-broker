@@ -56,7 +56,7 @@ function run() {
   err
 
   log "${YELLOW}Get nonce with token from above->${NC}\n"
-  nonce=$(httpGet "${SERVER}"/getnonce\?bearertoken="${token}") || {
+  nonce=$(httpGet -H "Authorization: Bearer $token" "${SERVER}/getnonce") || {
     log_fail
     return 3
   }
@@ -73,7 +73,7 @@ function run() {
   print_token "$token"
 
   log "${YELLOW}Get keytab with token from above and principal ${PURPLE}${PRINCIPAL}${YELLOW}->${NC}\n"
-  keytab=$(httpGet "${SERVER}"/getkeytab\?bearertoken="${token}"\&principal="${PRINCIPAL}") || {
+  keytab=$(httpGet -H "Authorization: Bearer $token" "${SERVER}"/getkeytab\?principal="${PRINCIPAL}") || {
     log_fail
     return 3
   }
