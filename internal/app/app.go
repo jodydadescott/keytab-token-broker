@@ -30,6 +30,7 @@ import (
 	"github.com/jodydadescott/tokens2keytabs/internal/keytab"
 	"github.com/jodydadescott/tokens2keytabs/internal/nonce"
 	"github.com/jodydadescott/tokens2keytabs/internal/policy"
+	"github.com/jodydadescott/tokens2keytabs/internal/secret"
 	"github.com/jodydadescott/tokens2keytabs/internal/token"
 	"go.uber.org/zap"
 )
@@ -49,6 +50,7 @@ func NewConfig() *Config {
 		Nonce:  &nonce.Config{},
 		Token:  &token.Config{},
 		Keytab: &keytab.Config{},
+		Secret: &secret.ServerConfig{},
 	}
 }
 
@@ -59,6 +61,7 @@ type Config struct {
 	Nonce                                        *nonce.Config
 	Token                                        *token.Config
 	Keytab                                       *keytab.Config
+	Secret                                       *secret.ServerConfig
 }
 
 // Server ...
@@ -68,6 +71,7 @@ type Server struct {
 	tokenCache              *token.Tokens
 	keytabCache             *keytab.Keytabs
 	nonceCache              *nonce.Nonces
+	secret                  *secret.Server
 	httpServer, httpsServer *http.Server
 	policy                  *policy.Policy
 }
@@ -104,6 +108,11 @@ func (config *Config) Build() (*Server, error) {
 		return nil, err
 	}
 
+	secret, err := config.Secret.Build()
+	if err != nil {
+		return nil, err
+	}
+
 	policyConfig := &policy.Config{
 		Policy: config.Policy,
 	}
@@ -117,6 +126,7 @@ func (config *Config) Build() (*Server, error) {
 		tokenCache:  tokenCache,
 		keytabCache: keytabCache,
 		nonceCache:  nonceCache,
+		secret:      secret,
 		policy:      policy,
 	}
 
@@ -260,6 +270,59 @@ func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keyta
 	}
 
 	zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Denied:Policy : err=%s", shortToken, principal, err))
+	return nil, ErrAuthFail
+
+}
+
+func (t *Server) getSecret(ctx context.Context, token, name string) (*secret.Secret, error) {
+
+	shortToken := ""
+
+	if token == "" {
+		zap.L().Debug(fmt.Sprintf("getSecret(token=,name=%s)->Denied:Fail : err=%s", name, "Token is empty"))
+		return nil, ErrDataValidationFail
+	}
+
+	shortToken = token[1:8] + ".."
+
+	if name == "" {
+		zap.L().Debug(fmt.Sprintf("getSecret(token=%s,name=%s)->Denied:Fail : err=%s", shortToken, name, "Principal is empty"))
+		return nil, ErrDataValidationFail
+	}
+
+	xtoken, err := t.tokenCache.GetToken(token)
+	if err != nil {
+		zap.L().Debug(fmt.Sprintf("getSecret(token=%s,name=%s)->Denied:Fail : err=%s", shortToken, name, err))
+		return nil, ErrAuthFail
+	}
+
+	if xtoken.Aud == "" {
+		err = fmt.Errorf("Audience is empty")
+		zap.L().Debug(fmt.Sprintf("getSecret(token=%s,name=%s)->Denied:Fail : err=%s", shortToken, name, err))
+		return nil, ErrAuthFail
+	}
+
+	nonce := t.nonceCache.GetNonce(xtoken.Aud)
+	if nonce == nil {
+		zap.L().Debug(fmt.Sprintf("getSecret(token=%s,name=%s)->Denied:Fail : err=%s", shortToken, name, err))
+		return nil, ErrAuthFail
+	}
+
+	if t.policy.AuthGetSecret(ctx, xtoken.Claims, nonce.Value, name) {
+
+		secret := t.secret.GetSecret(name)
+
+		if secret == nil {
+			zap.L().Debug(fmt.Sprintf("getSecret(token=%s,name=%s)->Denied:Fail : err=%s", shortToken, name, err))
+			return nil, ErrNotFound
+		}
+
+		zap.L().Debug(fmt.Sprintf("getSecret(token=%s,name=%s)->Granted", shortToken, name))
+		return secret, nil
+
+	}
+
+	zap.L().Debug(fmt.Sprintf("getSecret(token=%s,name=%s)->Denied:Policy : err=%s", shortToken, name, err))
 	return nil, ErrAuthFail
 
 }

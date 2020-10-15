@@ -19,6 +19,7 @@ package policy
 // Input Data structure sent to OPA / Rego for decison
 type Input struct {
 	Claims    interface{} `json:"claims,omitempty" yaml:"claims,omitempty"`
-	Principal string      `json:"principal,omitempty" yaml:"principal,omitempty"`
 	Nonce     string      `json:"nonce,omitempty" yaml:"nonce,omitempty"`
+	Principal string      `json:"principal,omitempty" yaml:"principal,omitempty"`
+	Secret    string      `json:"secret,omitempty" yaml:"secret,omitempty"`
 }

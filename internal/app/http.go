@@ -86,6 +86,20 @@ func (t *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		fmt.Fprintf(w, keytab.JSON()+"\n")
 		return
+
+	case "/getsecret":
+		name := getKey(r, "name")
+		if name == "" {
+			http.Error(w, newErrorResponse("Parameter 'name' required")+"\n", http.StatusConflict)
+			return
+		}
+
+		result, err := t.getSecret(r.Context(), token, name)
+		if handleERR(w, err) {
+			return
+		}
+		fmt.Fprintf(w, result.JSON()+"\n")
+		return
 	}
 
 	http.Error(w, newErrorResponse("Path "+r.URL.Path+" not mapped")+"\n", http.StatusConflict)

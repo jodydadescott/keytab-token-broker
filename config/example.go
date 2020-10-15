@@ -12,6 +12,7 @@ package main
 
 default auth_get_nonce = false
 default auth_get_keytab = false
+default auth_get_secret = false
 
 auth_base {
    # Match Issuer
@@ -36,6 +37,13 @@ auth_get_keytab {
    auth_nonce
    split(input.claims.service.keytab,",")[_] == input.principal
 }
+
+auth_get_secret {
+   # Verify that the request nonce matches the expected nonce. Our token provider
+   # has the nonce in the audience field under claims
+   auth_base
+   auth_nonce
+}
 `
 
 var exampleTLSCert = `-----BEGIN CERTIFICATE-----
@@ -59,16 +67,6 @@ var exampleTLSKey = `-----BEGIN EC PRIVATE KEY-----
 ................................................................
 ................................
 -----END EC PRIVATE KEY-----`
-
-// TimePeriod
-// OneMinute
-// FiveMinute
-// QuarterHour
-// HalfHour
-// Hour
-// QuarterDay
-// HalfDay
-// Day
 
 // NewV1ExampleConfig New example config
 func NewV1ExampleConfig() *Config {
@@ -95,6 +93,23 @@ func NewV1ExampleConfig() *Config {
 		},
 		Data: &Data{
 			KeytabPrincipals: []string{"superman@EXAMPLE.COM", "birdman@EXAMPLE.COM"},
+			Secrets: []*Secret{
+				&Secret{
+					Name:     "secret1",
+					Seed:     "this is not a good seed for secret1",
+					Lifetime: time.Duration(10) * time.Minute,
+				},
+				&Secret{
+					Name:     "secret2",
+					Seed:     "this is not a good seed for secret2",
+					Lifetime: time.Duration(10) * time.Minute,
+				},
+				&Secret{
+					Name:     "secret3",
+					Seed:     "this is not a good seed for secret3",
+					Lifetime: time.Duration(10) * time.Minute,
+				},
+			},
 		},
 	}
 }

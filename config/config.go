@@ -44,7 +44,15 @@ type Logging struct {
 
 // Data Config
 type Data struct {
-	KeytabPrincipals []string `json:"principals,omitempty" yaml:"principals,omitempty"`
+	KeytabPrincipals []string  `json:"principals,omitempty" yaml:"principals,omitempty"`
+	Secrets          []*Secret `json:"secrets,omitempty" yaml:"secrets,omitempty"`
+}
+
+// Secret Config
+type Secret struct {
+	Name     string        `json:"name,omitempty" yaml:"name,omitempty"`
+	Seed     string        `json:"seed,omitempty" yaml:"seed,omitempty"`
+	Lifetime time.Duration `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
 }
 
 // NewConfig Returns new V1 Config
@@ -81,6 +89,8 @@ func (t *Config) Clone() *Config {
 
 // Merge Config into existing config
 func (t *Config) Merge(config *Config) {
+
+	config = config.Clone()
 
 	if config.Network != nil {
 
@@ -175,6 +185,12 @@ func (t *Config) Merge(config *Config) {
 		if config.Data.KeytabPrincipals != nil {
 			for _, s := range config.Data.KeytabPrincipals {
 				t.Data.KeytabPrincipals = append(t.Data.KeytabPrincipals, s)
+			}
+		}
+
+		if config.Data.Secrets != nil {
+			for _, s := range config.Data.Secrets {
+				t.Data.Secrets = append(t.Data.Secrets, s)
 			}
 		}
 

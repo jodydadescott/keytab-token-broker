@@ -30,6 +30,7 @@ import (
 
 	"github.com/jodydadescott/tokens2keytabs/config"
 	"github.com/jodydadescott/tokens2keytabs/internal/app"
+	"github.com/jodydadescott/tokens2keytabs/internal/secret"
 	"github.com/open-policy-agent/opa/rego"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -80,6 +81,16 @@ func (t *ConfigLoader) ServerConfig() (*app.Config, error) {
 		if t.Config.Data.KeytabPrincipals != nil {
 			for _, s := range t.Config.Data.KeytabPrincipals {
 				serverConfig.Keytab.Principals = append(serverConfig.Keytab.Principals, s)
+			}
+		}
+
+		if t.Config.Data.Secrets != nil {
+			for _, s := range t.Config.Data.Secrets {
+				serverConfig.Secret.Secrets = append(serverConfig.Secret.Secrets, &secret.SecretConfig{
+					Name:     s.Name,
+					Seed:     s.Seed,
+					Lifetime: s.Lifetime,
+				})
 			}
 		}
 	}

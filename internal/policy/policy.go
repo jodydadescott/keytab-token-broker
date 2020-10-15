@@ -44,7 +44,7 @@ func (config *Config) Build() (*Policy, error) {
 	ctx := context.Background()
 
 	query, err := rego.New(
-		rego.Query("auth_get_nonce = data.main.auth_get_nonce; auth_get_keytab = data.main.auth_get_keytab"),
+		rego.Query("auth_get_nonce = data.main.auth_get_nonce; auth_get_keytab = data.main.auth_get_keytab; auth_get_secret = data.main.auth_get_secret"),
 		rego.Module("kerberos.rego", config.Policy),
 	).PrepareForEval(ctx)
 
@@ -109,6 +109,36 @@ func (t *Policy) AuthGetKeytab(ctx context.Context, claims map[string]interface{
 	}
 
 	if auth, ok := results[0].Bindings["auth_get_keytab"].(bool); ok {
+		zap.L().Error(fmt.Sprintf("Got result %t", auth))
+		return auth
+	}
+
+	zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; unexpected result type"))
+	return false
+}
+
+// AuthGetSecret Auth request for secret
+func (t *Policy) AuthGetSecret(ctx context.Context, claims map[string]interface{}, nonce, name string) bool {
+
+	input := &Input{
+		Claims: claims,
+		Nonce:  nonce,
+		Secret: name,
+	}
+
+	results, err := t.query.Eval(ctx, rego.EvalInput(input))
+
+	if err != nil {
+		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; err->%s", err))
+		return false
+	}
+
+	if len(results) == 0 {
+		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; results are empty"))
+		return false
+	}
+
+	if auth, ok := results[0].Bindings["auth_get_secret"].(bool); ok {
 		zap.L().Error(fmt.Sprintf("Got result %t", auth))
 		return auth
 	}
