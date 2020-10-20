@@ -14,18 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package app
+package tokens2secrets
 
 import (
 	"context"
-	"crypto/tls"
-	"errors"
 	"fmt"
-	"net/http"
-	"strconv"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/jodydadescott/tokens2keytabs/internal/keytab"
 	"github.com/jodydadescott/tokens2keytabs/internal/nonce"
@@ -35,75 +29,52 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	// ErrDataValidationFail ...
-	ErrDataValidationFail error = errors.New("Data validation failure")
-	// ErrAuthFail ...
-	ErrAuthFail error = errors.New("Authorization failure")
-	// ErrNotFound ...
-	ErrNotFound error = errors.New("Entity not found")
-)
-
 // NewConfig Returns new config
 func NewConfig() *Config {
 	return &Config{
 		Nonce:  &nonce.Config{},
 		Token:  &token.Config{},
 		Keytab: &keytab.Config{},
-		Secret: &secret.ServerConfig{},
+		Secret: &secret.Config{},
 	}
 }
 
 // Config ...
 type Config struct {
-	Listen, TLSCert, TLSKey, Query, Policy, Seed string
-	HTTPPort, HTTPSPort                          int
-	Nonce                                        *nonce.Config
-	Token                                        *token.Config
-	Keytab                                       *keytab.Config
-	Secret                                       *secret.ServerConfig
+	Query, Policy, Seed string
+	Nonce               *nonce.Config
+	Token               *token.Config
+	Keytab              *keytab.Config
+	Secret              *secret.Config
 }
 
-// Server ...
-type Server struct {
-	closed                  chan struct{}
-	wg                      sync.WaitGroup
-	tokenCache              *token.Cache
-	keytabCache             *keytab.Cache
-	nonceCache              *nonce.Cache
-	secret                  *secret.Cache
-	httpServer, httpsServer *http.Server
-	policy                  *policy.Policy
+// Cache ...
+type Cache struct {
+	closed chan struct{}
+	wg     sync.WaitGroup
+	token  *token.Cache
+	keytab *keytab.Cache
+	nonce  *nonce.Cache
+	secret *secret.Cache
+	policy *policy.Policy
 }
 
-// Build Returns a new Server
-func (config *Config) Build() (*Server, error) {
+// Build Returns a new Cache
+func (config *Config) Build() (*Cache, error) {
 
 	zap.L().Info(fmt.Sprintf("Starting"))
 
-	if config.HTTPPort < 0 {
-		return nil, fmt.Errorf("HTTPPort must be 0 or greater")
-	}
-
-	if config.HTTPSPort < 0 {
-		return nil, fmt.Errorf("HTTPSPort must be 0 or greater")
-	}
-
-	if config.HTTPPort == 0 && config.HTTPSPort == 0 {
-		return nil, fmt.Errorf("Must enable http or https")
-	}
-
-	tokenCache, err := config.Token.Build()
+	token, err := config.Token.Build()
 	if err != nil {
 		return nil, err
 	}
 
-	keytabCache, err := config.Keytab.Build()
+	keytab, err := config.Keytab.Build()
 	if err != nil {
 		return nil, err
 	}
 
-	nonceCache, err := config.Nonce.Build()
+	nonce, err := config.Nonce.Build()
 	if err != nil {
 		return nil, err
 	}
@@ -121,75 +92,24 @@ func (config *Config) Build() (*Server, error) {
 		return nil, err
 	}
 
-	server := &Server{
-		closed:      make(chan struct{}),
-		tokenCache:  tokenCache,
-		keytabCache: keytabCache,
-		nonceCache:  nonceCache,
-		secret:      secret,
-		policy:      policy,
-	}
-
-	if config.HTTPPort > 0 {
-		listen := config.Listen
-		if strings.ToLower(listen) == "any" {
-			listen = ""
-		}
-		listener := listen + ":" + strconv.Itoa(config.HTTPPort)
-		zap.L().Debug("Starting HTTP")
-		server.httpServer = &http.Server{Addr: listener, Handler: server}
-		go func() {
-			server.httpServer.ListenAndServe()
-		}()
-	}
-
-	if config.HTTPSPort > 0 {
-		listen := config.Listen
-		if strings.ToLower(listen) == "any" {
-			listen = ""
-		}
-		listener := listen + ":" + strconv.Itoa(config.HTTPSPort)
-
-		zap.L().Debug("Starting HTTPS")
-
-		if config.TLSCert == "" {
-			return nil, fmt.Errorf("TLSCert is required when HTTPS port is set")
-		}
-
-		if config.TLSKey == "" {
-			return nil, fmt.Errorf("TLSKey is required when HTTPS port is set")
-		}
-
-		cert, err := tls.X509KeyPair([]byte(config.TLSCert), []byte(config.TLSKey))
-		if err != nil {
-			return nil, err
-		}
-
-		server.httpsServer = &http.Server{Addr: listener, Handler: server, TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}}}
-
-		go func() {
-			server.httpsServer.ListenAndServeTLS("", "")
-		}()
-
+	server := &Cache{
+		closed: make(chan struct{}),
+		token:  token,
+		keytab: keytab,
+		nonce:  nonce,
+		secret: secret,
+		policy: policy,
 	}
 
 	go func() {
-
 		for {
 			select {
 			case <-server.closed:
 				zap.L().Debug("Shutting down")
-
-				if server.httpServer != nil {
-					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					defer cancel()
-					server.httpServer.Shutdown(ctx)
-				}
-
-				server.keytabCache.Shutdown()
-				server.tokenCache.Shutdown()
-				server.nonceCache.Shutdown()
-
+				server.keytab.Shutdown()
+				server.secret.Shutdown()
+				server.token.Shutdown()
+				server.nonce.Shutdown()
 			}
 		}
 	}()
@@ -197,15 +117,15 @@ func (config *Config) Build() (*Server, error) {
 	return server, nil
 }
 
-// GetNonce ...
-func (t *Server) GetNonce(ctx context.Context, tokenString string) (*nonce.Nonce, error) {
+// GetNonce returns Nonce if provided token is authorized
+func (t *Cache) GetNonce(ctx context.Context, tokenString string) (*nonce.Nonce, error) {
 
 	if tokenString == "" {
 		zap.L().Debug(fmt.Sprintf("newNonce(tokenString=)->Denied:Fail : err=%s", "tokenString is empty"))
 		return nil, ErrDataValidationFail
 	}
 
-	token, err := t.tokenCache.ParseToken(tokenString)
+	token, err := t.token.ParseToken(tokenString)
 	if err != nil {
 		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[err=%s]", tokenString, err))
 		return nil, ErrAuthFail
@@ -213,7 +133,7 @@ func (t *Server) GetNonce(ctx context.Context, tokenString string) (*nonce.Nonce
 
 	// Validate that token is allowed to pull nonce
 	if t.policy.AuthGetNonce(ctx, token.Claims) {
-		nonce := t.nonceCache.NewNonce()
+		nonce := t.nonce.NewNonce()
 		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[%s]", tokenString, nonce.Value))
 		return nonce, nil
 	}
@@ -222,8 +142,8 @@ func (t *Server) GetNonce(ctx context.Context, tokenString string) (*nonce.Nonce
 	return nil, ErrAuthFail
 }
 
-// GetKeytab ...
-func (t *Server) GetKeytab(ctx context.Context, token, principal string) (*keytab.Keytab, error) {
+// GetKeytab returns Keytab if provided token is authorized
+func (t *Cache) GetKeytab(ctx context.Context, token, principal string) (*keytab.Keytab, error) {
 
 	shortToken := ""
 
@@ -239,7 +159,7 @@ func (t *Server) GetKeytab(ctx context.Context, token, principal string) (*keyta
 		return nil, ErrDataValidationFail
 	}
 
-	xtoken, err := t.tokenCache.ParseToken(token)
+	xtoken, err := t.token.ParseToken(token)
 	if err != nil {
 		zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Denied:Fail : err=%s", shortToken, principal, err))
 		return nil, ErrAuthFail
@@ -251,7 +171,7 @@ func (t *Server) GetKeytab(ctx context.Context, token, principal string) (*keyta
 		return nil, ErrAuthFail
 	}
 
-	nonce := t.nonceCache.GetNonce(xtoken.Aud)
+	nonce := t.nonce.GetNonce(xtoken.Aud)
 	if nonce == nil {
 		zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Denied:Fail : err=%s", shortToken, principal, err))
 		return nil, ErrAuthFail
@@ -259,7 +179,7 @@ func (t *Server) GetKeytab(ctx context.Context, token, principal string) (*keyta
 
 	if t.policy.AuthGetKeytab(ctx, xtoken.Claims, nonce.Value, principal) {
 
-		keytab := t.keytabCache.GetKeytab(principal)
+		keytab := t.keytab.GetKeytab(principal)
 
 		if keytab == nil {
 			zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Denied:Fail : err=%s", shortToken, principal, err))
@@ -276,8 +196,8 @@ func (t *Server) GetKeytab(ctx context.Context, token, principal string) (*keyta
 
 }
 
-// GetSecret ...
-func (t *Server) GetSecret(ctx context.Context, token, name string) (*secret.Secret, error) {
+// GetSecret returns Secret if provided token is authorized
+func (t *Cache) GetSecret(ctx context.Context, token, name string) (*secret.Secret, error) {
 
 	shortToken := ""
 
@@ -293,7 +213,7 @@ func (t *Server) GetSecret(ctx context.Context, token, name string) (*secret.Sec
 		return nil, ErrDataValidationFail
 	}
 
-	xtoken, err := t.tokenCache.ParseToken(token)
+	xtoken, err := t.token.ParseToken(token)
 	if err != nil {
 		zap.L().Debug(fmt.Sprintf("getSecret(token=%s,name=%s)->Denied:Fail : err=%s", shortToken, name, err))
 		return nil, ErrAuthFail
@@ -305,7 +225,7 @@ func (t *Server) GetSecret(ctx context.Context, token, name string) (*secret.Sec
 		return nil, ErrAuthFail
 	}
 
-	nonce := t.nonceCache.GetNonce(xtoken.Aud)
+	nonce := t.nonce.GetNonce(xtoken.Aud)
 	if nonce == nil {
 		zap.L().Debug(fmt.Sprintf("getSecret(token=%s,name=%s)->Denied:Fail : err=%s", shortToken, name, err))
 		return nil, ErrAuthFail
@@ -331,7 +251,7 @@ func (t *Server) GetSecret(ctx context.Context, token, name string) (*secret.Sec
 }
 
 // Shutdown Server
-func (t *Server) Shutdown() {
+func (t *Cache) Shutdown() {
 	close(t.closed)
 	t.wg.Wait()
 }

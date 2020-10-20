@@ -45,10 +45,10 @@ var ErrSecretNotFound error = errors.New("Secret with given name not found")
 // ErrAuthDenied ...
 var ErrAuthDenied error = errors.New("Authorization Denied")
 
-// ServerConfig Config
-type ServerConfig struct {
+// Config Config
+type Config struct {
 	MaxLifetime, MinLifetime time.Duration
-	Secrets                  []*SecretConfig
+	Secrets                  []*Secret
 }
 
 type secretWrapper struct {
@@ -65,7 +65,7 @@ type Cache struct {
 }
 
 // Build Returns a new Cache
-func (config *ServerConfig) Build() (*Cache, error) {
+func (config *Config) Build() (*Cache, error) {
 
 	zap.L().Debug("Starting")
 
@@ -98,7 +98,7 @@ func (config *ServerConfig) Build() (*Cache, error) {
 	return t, nil
 }
 
-func (t *Cache) loadSecrets(secrets []*SecretConfig) error {
+func (t *Cache) loadSecrets(secrets []*Secret) error {
 
 	if secrets == nil || len(secrets) <= 0 {
 		zap.L().Warn("No secrets to load?")
@@ -116,7 +116,7 @@ func (t *Cache) loadSecrets(secrets []*SecretConfig) error {
 	return nil
 }
 
-func (t *Cache) addSecret(secret *SecretConfig) error {
+func (t *Cache) addSecret(secret *Secret) error {
 
 	// Must have map locked!
 
@@ -273,4 +273,8 @@ func int31n(n int, input int64) int32 {
 func getTime() time.Time {
 	// If running multiple instance the time must be the same so we statically use UTC
 	return time.Now().In(time.UTC)
+}
+
+// Shutdown Server
+func (t *Cache) Shutdown() {
 }
