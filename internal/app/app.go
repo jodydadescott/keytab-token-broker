@@ -68,10 +68,10 @@ type Config struct {
 type Server struct {
 	closed                  chan struct{}
 	wg                      sync.WaitGroup
-	tokenCache              *token.Server
-	keytabCache             *keytab.Server
-	nonceCache              *nonce.Nonces
-	secret                  *secret.Server
+	tokenCache              *token.Cache
+	keytabCache             *keytab.Cache
+	nonceCache              *nonce.Cache
+	secret                  *secret.Cache
 	httpServer, httpsServer *http.Server
 	policy                  *policy.Policy
 }
@@ -197,21 +197,22 @@ func (config *Config) Build() (*Server, error) {
 	return server, nil
 }
 
-func (t *Server) newNonce(ctx context.Context, tokenString string) (*nonce.Nonce, error) {
+// GetNonce ...
+func (t *Server) GetNonce(ctx context.Context, tokenString string) (*nonce.Nonce, error) {
 
 	if tokenString == "" {
 		zap.L().Debug(fmt.Sprintf("newNonce(tokenString=)->Denied:Fail : err=%s", "tokenString is empty"))
 		return nil, ErrDataValidationFail
 	}
 
-	xtoken, err := t.tokenCache.GetToken(tokenString)
+	token, err := t.tokenCache.ParseToken(tokenString)
 	if err != nil {
 		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[err=%s]", tokenString, err))
 		return nil, ErrAuthFail
 	}
 
 	// Validate that token is allowed to pull nonce
-	if t.policy.AuthGetNonce(ctx, xtoken.Claims) {
+	if t.policy.AuthGetNonce(ctx, token.Claims) {
 		nonce := t.nonceCache.NewNonce()
 		zap.L().Debug(fmt.Sprintf("newNonce(%s)->[%s]", tokenString, nonce.Value))
 		return nonce, nil
@@ -221,7 +222,8 @@ func (t *Server) newNonce(ctx context.Context, tokenString string) (*nonce.Nonce
 	return nil, ErrAuthFail
 }
 
-func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keytab.Keytab, error) {
+// GetKeytab ...
+func (t *Server) GetKeytab(ctx context.Context, token, principal string) (*keytab.Keytab, error) {
 
 	shortToken := ""
 
@@ -237,7 +239,7 @@ func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keyta
 		return nil, ErrDataValidationFail
 	}
 
-	xtoken, err := t.tokenCache.GetToken(token)
+	xtoken, err := t.tokenCache.ParseToken(token)
 	if err != nil {
 		zap.L().Debug(fmt.Sprintf("getKeytab(token=%s,principal=%s)->Denied:Fail : err=%s", shortToken, principal, err))
 		return nil, ErrAuthFail
@@ -274,7 +276,8 @@ func (t *Server) getKeytab(ctx context.Context, token, principal string) (*keyta
 
 }
 
-func (t *Server) getSecret(ctx context.Context, token, name string) (*secret.Secret, error) {
+// GetSecret ...
+func (t *Server) GetSecret(ctx context.Context, token, name string) (*secret.Secret, error) {
 
 	shortToken := ""
 
@@ -290,7 +293,7 @@ func (t *Server) getSecret(ctx context.Context, token, name string) (*secret.Sec
 		return nil, ErrDataValidationFail
 	}
 
-	xtoken, err := t.tokenCache.GetToken(token)
+	xtoken, err := t.tokenCache.ParseToken(token)
 	if err != nil {
 		zap.L().Debug(fmt.Sprintf("getSecret(token=%s,name=%s)->Denied:Fail : err=%s", shortToken, name, err))
 		return nil, ErrAuthFail

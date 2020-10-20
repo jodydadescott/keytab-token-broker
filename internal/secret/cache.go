@@ -57,15 +57,15 @@ type secretWrapper struct {
 	mutex      sync.Mutex
 }
 
-// Server Manages shared secrets
-type Server struct {
+// Cache Manages shared secrets
+type Cache struct {
 	mutex                    sync.RWMutex
 	internal                 map[string]*secretWrapper
 	maxLifetime, minLifetime time.Duration
 }
 
 // Build Returns a new Cache
-func (config *ServerConfig) Build() (*Server, error) {
+func (config *ServerConfig) Build() (*Cache, error) {
 
 	zap.L().Debug("Starting")
 
@@ -84,7 +84,7 @@ func (config *ServerConfig) Build() (*Server, error) {
 		return nil, fmt.Errorf("MaxLifetime must be greater than MinLifetime")
 	}
 
-	t := &Server{
+	t := &Cache{
 		internal:    make(map[string]*secretWrapper),
 		maxLifetime: maxLifetime,
 		minLifetime: minLifetime,
@@ -98,7 +98,7 @@ func (config *ServerConfig) Build() (*Server, error) {
 	return t, nil
 }
 
-func (t *Server) loadSecrets(secrets []*SecretConfig) error {
+func (t *Cache) loadSecrets(secrets []*SecretConfig) error {
 
 	if secrets == nil || len(secrets) <= 0 {
 		zap.L().Warn("No secrets to load?")
@@ -116,7 +116,7 @@ func (t *Server) loadSecrets(secrets []*SecretConfig) error {
 	return nil
 }
 
-func (t *Server) addSecret(secret *SecretConfig) error {
+func (t *Cache) addSecret(secret *SecretConfig) error {
 
 	// Must have map locked!
 
@@ -158,7 +158,7 @@ func (t *Server) addSecret(secret *SecretConfig) error {
 }
 
 // GetSecret Returns secret if found and authorized
-func (t *Server) GetSecret(name string) *Secret {
+func (t *Cache) GetSecret(name string) *Secret {
 
 	if name == "" {
 		zap.L().Debug("name is empty")

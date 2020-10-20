@@ -38,13 +38,13 @@ type Config struct {
 	CacheRefreshInterval, Lifetime time.Duration
 }
 
-// Server Manages nonces. For our purposes a nonce is defined as a random
+// Cache Manages nonces. For our purposes a nonce is defined as a random
 // string with an expiration time. Upon request a new nonce is generated
 // and returned along with the expiration time to the caller. This allows
 // the caller to hand the nonce to a remote party. The remote party can then
 // present the nonce back in the future (before the expiration time is reached)
 // and the nonce can be validated that it originated with us.
-type Server struct {
+type Cache struct {
 	mutex      sync.RWMutex
 	internal   map[string]*Nonce
 	closed     chan struct{}
@@ -55,7 +55,7 @@ type Server struct {
 }
 
 // Build Returns a new Cache
-func (config *Config) Build() (*Server, error) {
+func (config *Config) Build() (*Cache, error) {
 
 	zap.L().Debug("Starting Nonce Cache")
 
@@ -70,7 +70,7 @@ func (config *Config) Build() (*Server, error) {
 		lifetime = config.Lifetime
 	}
 
-	t := &Server{
+	t := &Cache{
 		internal: make(map[string]*Nonce),
 		closed:   make(chan struct{}),
 		ticker:   time.NewTicker(cacheRefreshInterval),
@@ -98,7 +98,7 @@ func (config *Config) Build() (*Server, error) {
 	return t, nil
 }
 
-func (t *Server) processCache() {
+func (t *Cache) processCache() {
 
 	zap.L().Debug("Processing cache start")
 
@@ -127,7 +127,7 @@ func (t *Server) processCache() {
 }
 
 // NewNonce Returns a new nonce
-func (t *Server) NewNonce() *Nonce {
+func (t *Cache) NewNonce() *Nonce {
 
 	b := make([]byte, 64)
 	for i := range b {
@@ -149,7 +149,7 @@ func (t *Server) NewNonce() *Nonce {
 }
 
 // GetNonce returns nonce if found and not expired
-func (t *Server) GetNonce(key string) *Nonce {
+func (t *Cache) GetNonce(key string) *Nonce {
 
 	if key == "" {
 		zap.L().Warn("request for empty nonce")
@@ -173,7 +173,7 @@ func (t *Server) GetNonce(key string) *Nonce {
 }
 
 // Shutdown shutdowns the cache map
-func (t *Server) Shutdown() {
+func (t *Cache) Shutdown() {
 	close(t.closed)
 	t.wg.Wait()
 }

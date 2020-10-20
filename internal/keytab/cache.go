@@ -55,7 +55,7 @@ type Config struct {
 	Lifetime   time.Duration
 }
 
-// Server holds and manages Kerberos Keytabs. Keytabs are generated or
+// Cache holds and manages Kerberos Keytabs. Keytabs are generated or
 // regenerated based on user specified intervals using the UNIX
 // cron format. When multiple instances of the server are ran the cron
 // interval should be configured the same. When keytabs are generated
@@ -83,7 +83,7 @@ type Config struct {
 // periods are calculated. If they differ by more then 30 seconds then
 // the Keytabs are generated using the previous period. Otherwise they
 // will be created when the next period arrives.
-type Server struct {
+type Cache struct {
 	closeTimer, closeKeymaker chan struct{}
 	runKeymaker               chan time.Time
 	wg                        sync.WaitGroup
@@ -96,7 +96,7 @@ type Server struct {
 }
 
 // Build Returns new instance of Keytabs
-func (config *Config) Build() (*Server, error) {
+func (config *Config) Build() (*Cache, error) {
 
 	var err error
 
@@ -114,7 +114,7 @@ func (config *Config) Build() (*Server, error) {
 		return nil, err
 	}
 
-	t := &Server{
+	t := &Cache{
 		closeTimer:    make(chan struct{}),
 		closeKeymaker: make(chan struct{}),
 		runKeymaker:   make(chan time.Time),
@@ -167,8 +167,6 @@ func (config *Config) Build() (*Server, error) {
 	now := getTime()
 	diff := t.timePeriod.From(now).Next().Time().Sub(now).Seconds()
 
-	// zap.L().Debug(fmt.Sprintf("Period->Now:%s, PeriodNow:%s, PeriodNext: %s", now, timePeriod.Now(now), timePeriod.Next(now)))
-
 	if diff > 30 {
 		zap.L().Debug(fmt.Sprintf("The next Keytab renew is in %f seconds; calling keymmaker now", diff))
 		t.runKeymaker <- t.timePeriod.From(now).Time()
@@ -208,7 +206,7 @@ func getTime() time.Time {
 	return time.Now().In(time.UTC)
 }
 
-func (t *Server) cacheRefresh(now time.Time) {
+func (t *Cache) cacheRefresh(now time.Time) {
 
 	zap.L().Debug(fmt.Sprintf("Running cacheRefresh for period:%s", now))
 
@@ -245,7 +243,7 @@ func (t *Server) cacheRefresh(now time.Time) {
 		// the same password if they have the same seed without revealing the real password
 		passwordhash := fmt.Sprintf("%x", sha256.Sum256([]byte(password)))[:12]
 
-		zap.L().Info(fmt.Sprintf("Principal=%s, Password_Hash=%s", principal, passwordhash))
+		zap.L().Debug(fmt.Sprintf("Principal=%s, Password_Hash=%s", principal, passwordhash))
 
 		base64File, err := newKeytab(principal, password)
 		if err != nil {
@@ -264,7 +262,7 @@ func (t *Server) cacheRefresh(now time.Time) {
 }
 
 // GetKeytab Returns Keytab if keytab exist.
-func (t *Server) GetKeytab(principal string) *Keytab {
+func (t *Cache) GetKeytab(principal string) *Keytab {
 
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
@@ -372,7 +370,7 @@ func windowsNewKeytab(principal, password string) (string, error) {
 		return "", err
 	}
 
-	zap.L().Info(fmt.Sprintf("command->%s, output->%s", logarg, string(cmdOutput.Bytes())))
+	zap.L().Debug(fmt.Sprintf("command->%s, output->%s", logarg, string(cmdOutput.Bytes())))
 
 	f, err := os.Open(filename)
 	if err != nil {
@@ -392,8 +390,8 @@ func unixNewKeytab(principal, password string) (string, error) {
 	return "this is not a valid keytab, it is fake", nil
 }
 
-// Shutdown ...
-func (t *Server) Shutdown() {
+// Shutdown shutdown
+func (t *Cache) Shutdown() {
 	close(t.closeTimer)
 	close(t.closeKeymaker)
 	t.wg.Wait()

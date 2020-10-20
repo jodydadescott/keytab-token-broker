@@ -65,7 +65,7 @@ func (t *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.URL.Path {
 	case "/getnonce":
-		nonce, err := t.newNonce(r.Context(), token)
+		nonce, err := t.GetNonce(r.Context(), token)
 		if handleERR(w, err) {
 			return
 		}
@@ -80,7 +80,7 @@ func (t *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		keytab, err := t.getKeytab(r.Context(), token, principal)
+		keytab, err := t.GetKeytab(r.Context(), token, principal)
 		if handleERR(w, err) {
 			return
 		}
@@ -95,7 +95,7 @@ func (t *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		result, err := t.getSecret(r.Context(), token, name)
+		result, err := t.GetSecret(r.Context(), token, name)
 		if handleERR(w, err) {
 			return
 		}
