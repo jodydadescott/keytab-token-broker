@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package configloader
+package server
 
 import (
 	"bufio"
@@ -24,13 +24,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
-	"github.com/jodydadescott/tokens2keytabs/config"
-	"github.com/jodydadescott/tokens2keytabs/internal/app"
-	"github.com/jodydadescott/tokens2keytabs/internal/secret"
+	"github.com/jodydadescott/tokens2secrets/config"
+	"github.com/jodydadescott/tokens2secrets/internal/keytab"
+	"github.com/jodydadescott/tokens2secrets/internal/secret"
 	"github.com/open-policy-agent/opa/rego"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -42,25 +41,25 @@ const (
 	requestTimeout     int = 60
 )
 
-// ConfigLoader Load Config from one or more places such as Windows Registry,
+// Loader Load Config from one or more places such as Windows Registry,
 // FileSystem and URL. ConfigLoader handles different config versions and
 // merging of configurations into single runtime config that consist of
 // the application config and Zap logger config
-type ConfigLoader struct {
+type Loader struct {
 	Config *config.Config
 }
 
-// NewConfigLoader Return new ConfigLoader instance
-func NewConfigLoader() *ConfigLoader {
-	return &ConfigLoader{
+// NewLoader Return new ConfigLoader instance
+func NewLoader() *Loader {
+	return &Loader{
 		Config: config.NewConfig(),
 	}
 }
 
 // ServerConfig Returns Server Config
-func (t *ConfigLoader) ServerConfig() (*app.Config, error) {
+func (t *Loader) ServerConfig() (*Config, error) {
 
-	serverConfig := app.NewConfig()
+	serverConfig := &Config{}
 
 	if t.Config.Network != nil {
 		serverConfig.Listen = t.Config.Network.Listen
@@ -72,21 +71,25 @@ func (t *ConfigLoader) ServerConfig() (*app.Config, error) {
 
 	if t.Config.Policy != nil {
 		serverConfig.Policy = t.Config.Policy.Policy
-		serverConfig.Nonce.Lifetime = t.Config.Policy.NonceLifetime
-		serverConfig.Keytab.Lifetime = t.Config.Policy.KeytabLifetime
-		serverConfig.Keytab.Seed = t.Config.Policy.Seed
+		serverConfig.NonceLifetime = t.Config.Policy.NonceLifetime
+		serverConfig.KeytabLifetime = t.Config.Policy.KeytabLifetime
 	}
 
 	if t.Config.Data != nil {
-		if t.Config.Data.KeytabPrincipals != nil {
-			for _, s := range t.Config.Data.KeytabPrincipals {
-				serverConfig.Keytab.Principals = append(serverConfig.Keytab.Principals, s)
+
+		if t.Config.Data.Keytabs != nil {
+			for _, s := range t.Config.Data.Keytabs {
+				serverConfig.KeytabKeytabs = append(serverConfig.KeytabKeytabs, &keytab.Keytab{
+					Principal: s.Principal,
+					Seed:      s.Seed,
+					Lifetime:  s.Lifetime,
+				})
 			}
 		}
 
 		if t.Config.Data.Secrets != nil {
 			for _, s := range t.Config.Data.Secrets {
-				serverConfig.Secret.Secrets = append(serverConfig.Secret.Secrets, &secret.SecretConfig{
+				serverConfig.SecretSecrets = append(serverConfig.SecretSecrets, &secret.Secret{
 					Name:     s.Name,
 					Seed:     s.Seed,
 					Lifetime: s.Lifetime,
@@ -99,7 +102,7 @@ func (t *ConfigLoader) ServerConfig() (*app.Config, error) {
 }
 
 // ZapConfig Returns Zap Config
-func (t *ConfigLoader) ZapConfig() (*zap.Config, error) {
+func (t *Loader) ZapConfig() (*zap.Config, error) {
 
 	zapConfig := &zap.Config{
 		Development: false,
@@ -186,7 +189,7 @@ func (t *ConfigLoader) ZapConfig() (*zap.Config, error) {
 }
 
 // LoadeFromBytes Load data from bytes
-func (t *ConfigLoader) LoadeFromBytes(input []byte) error {
+func (t *Loader) LoadeFromBytes(input []byte) error {
 
 	// Input could be JSON, YAML or REGO Policy
 
@@ -231,7 +234,7 @@ func (t *ConfigLoader) LoadeFromBytes(input []byte) error {
 }
 
 // LoadFrom Load config(s) from one or more files or URLs (comma delimited)
-func (t *ConfigLoader) LoadFrom(input string) error {
+func (t *Loader) LoadFrom(input string) error {
 
 	var err error
 
@@ -249,7 +252,7 @@ func (t *ConfigLoader) LoadFrom(input string) error {
 	return nil
 }
 
-func (t *ConfigLoader) loadFromURL(input string) error {
+func (t *Loader) loadFromURL(input string) error {
 
 	req, err := http.NewRequest("GET", input, nil)
 	if err != nil {
@@ -276,7 +279,7 @@ func (t *ConfigLoader) loadFromURL(input string) error {
 
 }
 
-func (t *ConfigLoader) loadFromFile(input string) error {
+func (t *Loader) loadFromFile(input string) error {
 
 	f, err := os.Open(input)
 	if err != nil {
@@ -297,23 +300,23 @@ func (t *ConfigLoader) loadFromFile(input string) error {
 // LoadFromLocal Load data from registry. Its primary purpose is
 // to load config from the Windows registry. The implementation is
 // platform specific.
-func (t *ConfigLoader) LoadFromLocal() error {
+// func (t *Loader) LoadFromLocal() error {
 
-	if runtime.GOOS == "windows" {
-		configString, err := GetRuntimeConfigString()
-		if err != nil {
-			return err
-		}
+// 	if runtime.GOOS == "windows" {
+// 		configString, err := GetRuntimeConfigString()
+// 		if err != nil {
+// 			return err
+// 		}
 
-		err = t.LoadFrom(configString)
-		if err != nil {
-			return err
-		}
+// 		err = t.LoadFrom(configString)
+// 		if err != nil {
+// 			return err
+// 		}
 
-	}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func getHTTPClient() *http.Client {
 	return &http.Client{

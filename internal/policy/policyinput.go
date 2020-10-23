@@ -14,29 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package nonce
+package policy
 
-import (
-	"encoding/json"
-
-	"github.com/jinzhu/copier"
-)
-
-// Nonce holds one time expiring secret
-type Nonce struct {
-	Exp   int64  `json:"exp,omitempty" yaml:"exp,omitempty"`
-	Value string `json:"value,omitempty" yaml:"value,omitempty"`
-}
-
-// JSON Return JSON String representation
-func (t *Nonce) JSON() string {
-	j, _ := json.Marshal(t)
-	return string(j)
-}
-
-// Copy return copy
-func (t *Nonce) Copy() *Nonce {
-	clone := &Nonce{}
-	copier.Copy(&clone, &t)
-	return clone
+// Input Data structure sent to OPA / Rego for auth decision
+type Input struct {
+	Claims    interface{} `json:"claims,omitempty" yaml:"claims,omitempty"`
+	Nonce     string      `json:"nonce,omitempty" yaml:"nonce,omitempty"`
+	Principal string      `json:"principal,omitempty" yaml:"principal,omitempty"`
+	Secret    string      `json:"secret,omitempty" yaml:"secret,omitempty"`
 }

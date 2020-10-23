@@ -36,9 +36,9 @@ func Test1(t *testing.T) {
 		t.Fatalf("Unexpected err %s", err)
 	}
 
-	nonce1 := nonces.NewNonce()
-	nonce2 := nonces.NewNonce()
-	nonce3 := nonces.NewNonce()
+	nonce1, _ := nonces.NewNonce()
+	nonce2, _ := nonces.NewNonce()
+	nonce3, _ := nonces.NewNonce()
 
 	if nonce1.Value == nonce2.Value {
 		t.Fatalf("Unexpected")
@@ -52,43 +52,43 @@ func Test1(t *testing.T) {
 		t.Fatalf("Unexpected")
 	}
 
-	if x := nonces.GetNonce(nonce1.Value); x == nil {
+	if _, err := nonces.GetNonce(nonce1.Value); err != nil {
 		t.Fatalf("Unexpected")
 	}
 
-	if x := nonces.GetNonce(nonce2.Value); x == nil {
+	if _, err := nonces.GetNonce(nonce2.Value); err != nil {
 		t.Fatalf("Unexpected")
 	}
 
-	if x := nonces.GetNonce(nonce3.Value); x == nil {
+	if _, err := nonces.GetNonce(nonce3.Value); err != nil {
 		t.Fatalf("Unexpected")
 	}
 
 	time.Sleep(2 * time.Second)
 
-	if x := nonces.GetNonce(nonce1.Value); x == nil {
+	if _, err := nonces.GetNonce(nonce1.Value); err != nil {
 		t.Fatalf("Unexpected")
 	}
 
-	if x := nonces.GetNonce(nonce2.Value); x == nil {
+	if _, err := nonces.GetNonce(nonce2.Value); err != nil {
 		t.Fatalf("Unexpected")
 	}
 
-	if x := nonces.GetNonce(nonce3.Value); x == nil {
+	if _, err := nonces.GetNonce(nonce3.Value); err != nil {
 		t.Fatalf("Unexpected")
 	}
 
 	time.Sleep(6 * time.Second)
 
-	if x := nonces.GetNonce(nonce1.Value); x != nil {
+	if _, err := nonces.GetNonce(nonce1.Value); err == nil {
 		t.Fatalf("Unexpected")
 	}
 
-	if x := nonces.GetNonce(nonce2.Value); x != nil {
+	if _, err := nonces.GetNonce(nonce2.Value); err == nil {
 		t.Fatalf("Unexpected")
 	}
 
-	if x := nonces.GetNonce(nonce3.Value); x != nil {
+	if _, err := nonces.GetNonce(nonce3.Value); err == nil {
 		t.Fatalf("Unexpected")
 	}
 

@@ -17,29 +17,25 @@ limitations under the License.
 package token
 
 import (
-	"crypto/ecdsa"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/jodydadescott/tokens2keytabs/internal/publickey"
+	"github.com/jodydadescott/tokens2secrets/internal/publickey"
 	"go.uber.org/zap"
 )
 
 const (
-	defaultCacheRefresh      = time.Duration(30) * time.Second
-	defaultRequestTimeout    = time.Duration(60) * time.Second
-	defaultIdleConnections   = 4
-	defaultPublicKeyLifetime = time.Duration(168) * time.Hour // 1 Week
-	defaultNonceLifetime     = time.Duration(60) * time.Second
-
-	nonceCharset = "abcdefghijklmnopqrstuvwxyz" +
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	defaultCacheRefresh = time.Duration(30) * time.Second
 )
+
+// PublicKeyCache Interface
+type PublicKeyCache interface {
+	GetKey(iss, kid string) (*publickey.PublicKey, error)
+}
 
 // Config config
 // IdleConnections is the idle connections for the HTTP client
@@ -48,9 +44,7 @@ const (
 // NonceLifetime is the lifetime of a Nonce
 // RequestTimeout is the request timeout for the HTTP client
 type Config struct {
-	IdleConnections                                                int
-	CacheRefresh, PublicKeyLifetime, NonceLifetime, RequestTimeout time.Duration
-	PermitPublicKeyHTTP                                            bool
+	CacheRefresh time.Duration
 }
 
 // Cache Parses and verifies tokens by fetching public keys from the token issuer and caching
@@ -65,98 +59,9 @@ type Cache struct {
 	closed              chan struct{}
 	ticker              *time.Ticker
 	wg                  sync.WaitGroup
-	httpClient          *http.Client
-	publicKeyMutex      sync.RWMutex
-	publicKeyMap        map[string]*publicKey
-	publicKeyLifetime   int
-	nonceLifetime       int64
 	seededRand          *rand.Rand
 	permitPublicKeyHTTP bool
-	publicKeys          *publickey.Server
-}
-
-type publicKey struct {
-	EcdsaPublicKey *ecdsa.PublicKey
-	Iss            string
-	Kid            string
-	Kty            string
-	Exp            int64
-}
-
-// Build Returns a new Token Cache
-func (config *Config) Build() (*Cache, error) {
-
-	zap.L().Debug("Starting Token Cache")
-
-	cacheRefresh := defaultCacheRefresh
-	requestTimeout := defaultRequestTimeout
-	idleConnections := defaultIdleConnections
-	publicKeyLifetime := defaultPublicKeyLifetime
-	nonceLifetime := defaultNonceLifetime
-
-	if config.CacheRefresh > 0 {
-		cacheRefresh = config.CacheRefresh
-	}
-
-	if config.RequestTimeout > 0 {
-		requestTimeout = config.RequestTimeout
-	}
-
-	if config.IdleConnections > 0 {
-		idleConnections = config.IdleConnections
-	}
-
-	if config.PublicKeyLifetime > 0 {
-		publicKeyLifetime = config.PublicKeyLifetime
-	}
-
-	if config.NonceLifetime > 0 {
-		nonceLifetime = config.NonceLifetime
-	}
-
-	publicKeysConfig := &publickey.Config{}
-	publicKeys, err := publicKeysConfig.Build()
-	if err != nil {
-		return nil, err
-	}
-
-	t := &Cache{
-		tokenMap:          make(map[string]*Token),
-		closed:            make(chan struct{}),
-		ticker:            time.NewTicker(cacheRefresh),
-		wg:                sync.WaitGroup{},
-		nonceLifetime:     int64(nonceLifetime),
-		publicKeyLifetime: int(publicKeyLifetime.Seconds()),
-		httpClient: &http.Client{
-			Transport: &http.Transport{
-				MaxIdleConnsPerHost: idleConnections,
-			},
-			Timeout: requestTimeout,
-		},
-		seededRand: rand.New(
-			rand.NewSource(time.Now().Unix())),
-		permitPublicKeyHTTP: config.PermitPublicKeyHTTP,
-		publicKeys:          publicKeys,
-	}
-
-	go func() {
-		t.wg.Add(1)
-		for {
-			select {
-			case <-t.closed:
-				zap.L().Debug("Stopping")
-				t.wg.Done()
-				return
-			case <-t.ticker.C:
-				zap.L().Debug("Processing cache start")
-				t.processTokenCache()
-				zap.L().Debug("Processing cache completed")
-			}
-		}
-	}()
-
-	return t, nil
-
+	publicKeyCache      PublicKeyCache
 }
 
 func (t *Cache) mapGetToken(key string) *Token {
@@ -171,8 +76,61 @@ func (t *Cache) mapPutToken(entity *Token) {
 	t.tokenMap[entity.TokenString] = entity
 }
 
+// Default returns default instance with default config
+func Default(publicKeyCache PublicKeyCache) (*Cache, error) {
+	c := &Config{}
+	return c.Build(publicKeyCache)
+}
+
+// Build Returns a new Token Cache
+func (config *Config) Build(publicKeyCache PublicKeyCache) (*Cache, error) {
+
+	zap.L().Debug("Starting")
+
+	cacheRefresh := defaultCacheRefresh
+
+	if config.CacheRefresh > 0 {
+		cacheRefresh = config.CacheRefresh
+	}
+
+	if publicKeyCache == nil {
+		return nil, fmt.Errorf("publicKeyCache is nil")
+	}
+
+	t := &Cache{
+		tokenMap:       make(map[string]*Token),
+		closed:         make(chan struct{}),
+		ticker:         time.NewTicker(cacheRefresh),
+		wg:             sync.WaitGroup{},
+		publicKeyCache: publicKeyCache,
+	}
+
+	go func() {
+		t.wg.Add(1)
+		for {
+			select {
+			case <-t.closed:
+				t.wg.Done()
+				return
+			case <-t.ticker.C:
+				zap.L().Debug("Processing cache start")
+				t.processTokenCache()
+				zap.L().Debug("Processing cache completed")
+			}
+		}
+	}()
+
+	return t, nil
+
+}
+
 // ParseToken ...
 func (t *Cache) ParseToken(tokenString string) (*Token, error) {
+
+	if tokenString == "" {
+		zap.L().Debug("tokenString is empty")
+		return nil, ErrInvalid
+	}
 
 	token := t.mapGetToken(tokenString)
 
@@ -232,7 +190,7 @@ func (t *Cache) ParseToken(tokenString string) (*Token, error) {
 
 		// SigningMethodRSA
 
-		publicKey, err := t.publicKeys.GetKey(token.Iss, token.Kid)
+		publicKey, err := t.publicKeyCache.GetKey(token.Iss, token.Kid)
 		if err != nil {
 			return nil, err
 		}
@@ -311,6 +269,7 @@ func (t *Cache) processTokenCache() {
 
 // Shutdown Cache
 func (t *Cache) Shutdown() {
+	zap.L().Debug("Stopping")
 	close(t.closed)
 	t.wg.Wait()
 }

@@ -83,30 +83,41 @@ func NewV1ExampleConfig() *Config {
 			Policy:         examplePolicy,
 			NonceLifetime:  time.Duration(60) * time.Second,
 			KeytabLifetime: time.Duration(60) * time.Second,
-			Seed:           "this is not a good seed",
 		},
 		Logging: &Logging{
-			LogLevel:         "info",
+			LogLevel:         "debug",
 			LogFormat:        "json",
 			OutputPaths:      []string{"stderr"},
 			ErrorOutputPaths: []string{"stderr"},
 		},
 		Data: &Data{
-			KeytabPrincipals: []string{"superman@EXAMPLE.COM", "birdman@EXAMPLE.COM"},
+			Keytabs: []*Keytab{
+				&Keytab{
+					Principal: "superman@EXAMPLE.COM",
+					Seed:      "nIKSXX9nJU5klguCrzP3d",
+					Lifetime:  time.Duration(1) * time.Minute,
+				},
+				&Keytab{
+					Principal: "birdman@EXAMPLE.COM",
+					Seed:      "CibIcE3XhRyXrngddsQzN",
+					Lifetime:  time.Duration(2) * time.Minute,
+				},
+			},
+
 			Secrets: []*Secret{
 				&Secret{
 					Name:     "secret1",
-					Seed:     "this is not a good seed for secret1",
+					Seed:     "E17cUHMYtU+FvpK3kig7o5",
 					Lifetime: time.Duration(10) * time.Minute,
 				},
 				&Secret{
 					Name:     "secret2",
-					Seed:     "this is not a good seed for secret2",
+					Seed:     "7Y3dzQcEvx+cPpRl4Qgti2",
 					Lifetime: time.Duration(10) * time.Minute,
 				},
 				&Secret{
 					Name:     "secret3",
-					Seed:     "this is not a good seed for secret3",
+					Seed:     "6zarcky7proZTYw8PEVzzT",
 					Lifetime: time.Duration(10) * time.Minute,
 				},
 			},

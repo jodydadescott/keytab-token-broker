@@ -14,12 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package policy
+package secret
 
-// Input Data structure sent to OPA / Rego for decison
-type Input struct {
-	Claims    interface{} `json:"claims,omitempty" yaml:"claims,omitempty"`
-	Nonce     string      `json:"nonce,omitempty" yaml:"nonce,omitempty"`
-	Principal string      `json:"principal,omitempty" yaml:"principal,omitempty"`
-	Secret    string      `json:"secret,omitempty" yaml:"secret,omitempty"`
-}
+import "errors"
+
+var (
+	// ErrNotFound Secret not found
+	ErrNotFound error = errors.New("Secret not found")
+	// ErrGenFail Secret not found
+	ErrGenFail error = errors.New("Secret generator failed")
+)

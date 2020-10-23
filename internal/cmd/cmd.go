@@ -25,8 +25,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/jodydadescott/tokens2keytabs/config"
-	"github.com/jodydadescott/tokens2keytabs/internal/configloader"
+	"github.com/jodydadescott/tokens2secrets/config"
+	"github.com/jodydadescott/tokens2secrets/internal/server"
+	"github.com/jodydadescott/tokens2secrets/internal/token"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -109,7 +110,7 @@ var serviceConfigSetCmd = &cobra.Command{
 		runtimeConfigString := args[0]
 		// Need to verify string
 
-		err := configloader.SetRuntimeConfigString(runtimeConfigString)
+		err := SetRuntimeConfigString(runtimeConfigString)
 		if err != nil {
 			return err
 		}
@@ -122,7 +123,7 @@ var serviceConfigShowCmd = &cobra.Command{
 	Short: "show config",
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		config, err := configloader.GetRuntimeConfigString()
+		config, err := GetRuntimeConfigString()
 		if err != nil {
 			return err
 		}
@@ -170,7 +171,7 @@ var configMakeCmd = &cobra.Command{
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		configLoader := configloader.NewConfigLoader()
+		configLoader := server.NewLoader()
 
 		// Input config can be zero, one or many
 		if viper.GetString("config") != "" {
@@ -210,10 +211,17 @@ var windowsRunDebugCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		var err error
-		configLoader := configloader.NewConfigLoader()
+		configLoader := server.NewLoader()
 
 		if viper.GetString("config") == "" {
-			err = configLoader.LoadFromLocal()
+
+			config, err := GetRuntimeConfigString()
+			if err != nil {
+				return err
+			}
+
+			err = configLoader.LoadFrom(config)
+
 		} else {
 			err = configLoader.LoadFrom(viper.GetString("config"))
 		}
@@ -268,10 +276,17 @@ var serverCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		var err error
-		configLoader := configloader.NewConfigLoader()
+		configLoader := server.NewLoader()
 
 		if viper.GetString("config") == "" {
-			err = configLoader.LoadFromLocal()
+
+			config, err := GetRuntimeConfigString()
+			if err != nil {
+				return err
+			}
+
+			err = configLoader.LoadFrom(config)
+
 		} else {
 			err = configLoader.LoadFrom(viper.GetString("config"))
 		}
@@ -319,22 +334,24 @@ var serverCmd = &cobra.Command{
 // Execute ...
 func Execute() {
 
-	if runtime.GOOS == "windows" {
-		isIntSess, err := isAnInteractiveSession()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, fmt.Sprintf("failed to determine if we are running in an interactive session: %v", err))
-			os.Exit(1)
-		}
-		if !isIntSess {
-			runService()
-			return
-		}
-	}
+	token.Main()
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	// if runtime.GOOS == "windows" {
+	// 	isIntSess, err := isAnInteractiveSession()
+	// 	if err != nil {
+	// 		fmt.Fprintln(os.Stderr, fmt.Sprintf("failed to determine if we are running in an interactive session: %v", err))
+	// 		os.Exit(1)
+	// 	}
+	// 	if !isIntSess {
+	// 		runService()
+	// 		return
+	// 	}
+	// }
+
+	// if err := rootCmd.Execute(); err != nil {
+	// 	fmt.Fprintln(os.Stderr, err)
+	// 	os.Exit(1)
+	// }
 }
 
 // serviceCmd

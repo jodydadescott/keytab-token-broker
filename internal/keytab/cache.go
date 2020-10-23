@@ -31,7 +31,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jodydadescott/tokens2keytabs/internal/timeperiod"
+	"github.com/jodydadescott/tokens2secrets/internal/timeperiod"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"go.uber.org/zap"
@@ -40,6 +40,9 @@ import (
 var (
 	principalRegex  = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 	defaultLifetime = time.Duration(5) * time.Minute
+
+	passwordCharset = "abcdefghijklmnopqrstuvwxyz" +
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@!"
 )
 
 // Config Configuration
@@ -50,9 +53,7 @@ var (
 //
 // TimePeriod: Time Period for Keytab Renewals
 type Config struct {
-	Seed       string
-	Principals []string
-	Lifetime   time.Duration
+	Keytabs []*Keytab
 }
 
 // Cache holds and manages Kerberos Keytabs. Keytabs are generated or
@@ -84,195 +85,248 @@ type Config struct {
 // the Keytabs are generated using the previous period. Otherwise they
 // will be created when the next period arrives.
 type Cache struct {
-	closeTimer, closeKeymaker chan struct{}
-	runKeymaker               chan time.Time
-	wg                        sync.WaitGroup
-	ticker                    *time.Ticker
-	mutex                     sync.RWMutex
-	internal                  map[string]*Keytab
-	seed                      string
-	principals                []string
-	timePeriod                *timeperiod.TimePeriod
+	closeTimer chan struct{}
+	wg         sync.WaitGroup
+	ticker     *time.Ticker
+	mutex      sync.RWMutex
+	internal   map[string]*wrapper
+}
+
+type wrapper struct {
+	mutex           sync.RWMutex
+	nextUpdate      time.Time
+	principal, seed string
+	keytab          *Keytab
+	err             error
+	timePeriod      *timeperiod.TimePeriod
 }
 
 // Build Returns new instance of Keytabs
 func (config *Config) Build() (*Cache, error) {
 
-	var err error
-
-	if config.Seed == "" {
-		return nil, fmt.Errorf("Seed is empty")
-	}
-
-	lifetime := defaultLifetime
-
-	if config.Lifetime > 0 {
-		lifetime = config.Lifetime
-	}
-
-	if err != nil {
-		return nil, err
-	}
+	zap.L().Debug("Starting")
 
 	t := &Cache{
-		closeTimer:    make(chan struct{}),
-		closeKeymaker: make(chan struct{}),
-		runKeymaker:   make(chan time.Time),
-		wg:            sync.WaitGroup{},
-		ticker:        time.NewTicker(time.Second),
-		internal:      make(map[string]*Keytab),
-		seed:          base32.StdEncoding.EncodeToString([]byte(config.Seed)),
-		timePeriod:    timeperiod.NewPeriod(lifetime),
+		closeTimer: make(chan struct{}),
+		wg:         sync.WaitGroup{},
+		ticker:     time.NewTicker(time.Second),
+		internal:   make(map[string]*wrapper),
 	}
 
+	err := t.init(config)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, principal := range config.Principals {
-		if len(principal) < 3 && len(principal) > 254 {
-			if len(principal) < 3 {
-				return nil, fmt.Errorf("Principal %s is to short", principal)
-			}
-			return nil, fmt.Errorf("Principal %s is to long", principal)
-		}
-
-		if !principalRegex.MatchString(principal) {
-			return nil, fmt.Errorf("Principal %s is invalid", principal)
-		}
-
-		t.principals = append(t.principals, principal)
-		zap.L().Debug(fmt.Sprintf("Loaded principal %s", principal))
-	}
-
-	// Before starting Ticker check to see if Time Period is almost over. If it is
-	// we just start the ticker and let it do its thing. Otherwise we have the keymaker
-	// run a loop and then we start the ticker.
-
-	go func() {
-		zap.L().Debug("Starting Keytab Maker")
-		t.wg.Add(1)
-		for {
-			select {
-			case <-t.closeKeymaker:
-				zap.L().Debug("Stopping Keytab Maker")
-				t.wg.Done()
-				return
-			case now := <-t.runKeymaker:
-				t.cacheRefresh(now)
-			}
-		}
-	}()
-
-	now := getTime()
-	diff := t.timePeriod.From(now).Next().Time().Sub(now).Seconds()
-
-	if diff > 30 {
-		zap.L().Debug(fmt.Sprintf("The next Keytab renew is in %f seconds; calling keymmaker now", diff))
-		t.runKeymaker <- t.timePeriod.From(now).Time()
-
-	} else {
-		zap.L().Debug(fmt.Sprintf("The next Keytab renew is in %f seconds; will let the ticker call keymaker when time", diff))
-	}
-
-	go func() {
-		zap.L().Debug("Starting Ticker")
-		t.wg.Add(1)
-
-		next := t.timePeriod.From(now).Next().Time()
-
-		for {
-			select {
-			case <-t.closeTimer:
-				zap.L().Debug("Stopping Ticker")
-				t.wg.Done()
-				return
-			case <-t.ticker.C:
-				// This fires every second
-				now := getTime()
-				if now.Equal(next) || now.After(next) {
-					next = t.timePeriod.From(now).Next().Time()
-					t.runKeymaker <- t.timePeriod.From(now).Time()
-				}
-			}
-		}
-	}()
-
+	go t.run()
 	return t, nil
 }
 
-func getTime() time.Time {
-	// If running multiple instance the time must be the same so we statically use UTC
-	return time.Now().In(time.UTC)
-}
-
-func (t *Cache) cacheRefresh(now time.Time) {
-
-	zap.L().Debug(fmt.Sprintf("Running cacheRefresh for period:%s", now))
-
-	// The period of 30 seconds is fine because it is less then
-	// the smalles possible validity period of 60 seconds
-	otp, err := totp.GenerateCodeCustom(t.seed, now, totp.ValidateOpts{
-		Period:    30,
-		Skew:      1,
-		Digits:    otp.DigitsEight,
-		Algorithm: otp.AlgorithmSHA512,
-	})
-	if err != nil {
-		zap.L().Error(fmt.Sprintf("Unable to get secret; err->%s", err))
-		return
-	}
+func (t *Cache) init(config *Config) error {
 
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
-	exp := now.Unix()
+	for _, keytab := range config.Keytabs {
+		if len(keytab.Principal) < 3 && len(keytab.Principal) > 254 {
+			if len(keytab.Principal) < 3 {
+				return fmt.Errorf("Keytab principal %s is to short", keytab.Principal)
+			}
+			return fmt.Errorf("Keytab principal %s is to long", keytab.Principal)
+		}
 
-	for _, principal := range t.principals {
+		if !principalRegex.MatchString(keytab.Principal) {
+			return fmt.Errorf("Keytab principal %s is invalid", keytab.Principal)
+		}
 
-		// Password is composed of seed, principal and OTP to make per keytab
-		// unique password. As long as seed and time are the same then passwords will
-		// match even when computed independentley
+		if keytab.Seed == "" {
+			return fmt.Errorf("Keytab %s is missing required seed", keytab.Principal)
+		}
 
-		password := fmt.Sprintf("%x", sha256.Sum256([]byte(t.seed+principal+otp)))[:24]
-		// A special character is required but a sha256 operation will not return
-		// a special char so for now statically added on a special char
-		password = password + `/a`
+		seed := base32.StdEncoding.EncodeToString([]byte(keytab.Seed))
+
+		lifetime := defaultLifetime
+		if keytab.Lifetime > 0 {
+			lifetime = keytab.Lifetime
+		}
+
+		// Lifetime less then a minute requires to much resources and does not make much sense
+		if lifetime < time.Minute {
+			return fmt.Errorf(fmt.Sprintf("Keytab %s lifetime is less then one minute. Lifetime must be one minute or greater", keytab.Principal))
+		}
+
+		t.internal[keytab.Principal] = &wrapper{
+			principal:  keytab.Principal,
+			timePeriod: timeperiod.NewPeriod(lifetime),
+			seed:       seed,
+		}
+		zap.L().Debug(fmt.Sprintf("Loaded principal %s", keytab.Principal))
+	}
+
+	return nil
+}
+
+func (t *Cache) run() {
+
+	zap.L().Debug("Starting")
+	t.wg.Add(1)
+
+	timeperiod := timeperiod.NewPeriod(time.Minute)
+
+	next := timeperiod.From(getTime()).Next().Time()
+
+	// We need to run on the top of the time period (or as close as possible). Based on now we
+	// set the next run to be the top of the next minute. Technically this means there can be a
+	// 59 second delay before the first run based on the time the server is started. We run a
+	// ticker every second and check to see if now is equal to or greater then next and if it
+	// is we run our jobs and update the next
+
+	for {
+		select {
+		case <-t.closeTimer:
+			t.wg.Done()
+			return
+		case <-t.ticker.C:
+			// This fires every second
+			now := getTime()
+			if now.Equal(next) || now.After(next) {
+				go t.update(next)
+				next = timeperiod.From(now).Next().Time()
+			}
+		}
+	}
+
+}
+
+func (t *Cache) update(now time.Time) {
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+	for _, wrapper := range t.internal {
+		go wrapper.update(now)
+	}
+}
+
+func (t *wrapper) update(now time.Time) {
+
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	if now.Equal(t.nextUpdate) || now.After(t.nextUpdate) {
+
+		zap.L().Debug(fmt.Sprintf("Keytab %s ready for new keytab", t.principal))
+
+		nowPeriod := t.timePeriod.From(now)
+		now = nowPeriod.Time()
+
+		otp, err := totp.GenerateCodeCustom(t.seed, now, totp.ValidateOpts{
+			Period:    30,
+			Skew:      1,
+			Digits:    otp.DigitsEight,
+			Algorithm: otp.AlgorithmSHA512,
+		})
+
+		if err != nil {
+			zap.L().Error(fmt.Sprintf("Unable to get create keytab %s ; err->%s", t.principal, err.Error()))
+			t.err = err
+			t.keytab = nil
+			return
+		}
+
+		hash := sha256.Sum256([]byte(otp + t.seed))
+
+		b := make([]byte, 28)
+		for i := range b {
+			b[i] = getChar(hash[i])
+		}
+
+		password := string(b)
+
+		base64File, err := newKeytab(t.principal, password)
+
+		if err != nil {
+			zap.L().Error(fmt.Sprintf("Unable to get create keytab %s ; err->%s", t.principal, err.Error()))
+			t.err = err
+			t.keytab = nil
+			return
+		}
 
 		// This allows the admin to verify that different instances of the server are assiging
 		// the same password if they have the same seed without revealing the real password
 		passwordhash := fmt.Sprintf("%x", sha256.Sum256([]byte(password)))[:12]
 
-		zap.L().Debug(fmt.Sprintf("Principal=%s, Password_Hash=%s", principal, passwordhash))
-
-		base64File, err := newKeytab(principal, password)
-		if err != nil {
-			zap.L().Error(fmt.Sprintf("Unable to get create keytab for principal %s ; err->%s", principal, err))
-			return
-		}
-
-		t.internal[principal] = &Keytab{
-			Principal:  "HTTP/" + principal,
+		t.nextUpdate = nowPeriod.Next().Time()
+		t.err = nil
+		t.keytab = &Keytab{
+			Principal:  "HTTP/" + t.principal,
 			Base64File: base64File,
-			Exp:        exp,
+			Exp:        nowPeriod.Time().Unix() + int64(t.timePeriod.Duration.Seconds()),
 		}
+
+		zap.L().Debug(fmt.Sprintf("Keytab %s generated; password=%s, exp=%d", t.principal, passwordhash, t.keytab.Exp))
+		return
 
 	}
 
+	zap.L().Debug(fmt.Sprintf("Keytab %s NOT ready for new keytab", t.principal))
+
+}
+
+func getChar(b byte) byte {
+	bint := int(b)
+	charsetlen := len(passwordCharset)
+	if int(b) < charsetlen {
+		return passwordCharset[bint]
+	}
+	_, r := bint/charsetlen, bint%charsetlen
+	return passwordCharset[r]
+}
+
+func int31n(n int, input int64) int32 {
+	v := uint32(input >> 31)
+	prod := uint64(v) * uint64(n)
+	low := uint32(prod)
+	if low < uint32(n) {
+		thresh := uint32(-n) % uint32(n)
+		for low < thresh {
+			v = uint32(input >> 31)
+			prod = uint64(v) * uint64(n)
+			low = uint32(prod)
+		}
+	}
+	return int32(prod >> 32)
 }
 
 // GetKeytab Returns Keytab if keytab exist.
-func (t *Cache) GetKeytab(principal string) *Keytab {
+func (t *Cache) GetKeytab(principal string) (*Keytab, error) {
+
+	if principal == "" {
+		zap.L().Debug("principal is empty")
+		return nil, ErrNotFound
+	}
 
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
 
-	if keytab, exist := t.internal[principal]; exist {
+	if wrapper, exist := t.internal[principal]; exist {
+
+		wrapper.mutex.RLock()
+		defer wrapper.mutex.RUnlock()
+
 		// Export function; returning copy
-		return keytab.Clone()
+		if wrapper.keytab == nil {
+			if wrapper.err == nil {
+				zap.L().Debug(fmt.Sprintf("Keytab %s has not been processed yet", principal))
+				return nil, ErrNotReady
+			}
+			zap.L().Debug(fmt.Sprintf("Keytab %s not generated due to error; err->%s", principal, wrapper.err.Error()))
+			return nil, ErrGenFail
+		}
+
+		return wrapper.keytab.Copy(), nil
 	}
 
-	return nil
+	zap.L().Debug(fmt.Sprintf("Keytab %s does not exist", principal))
+	return nil, ErrNotFound
 }
 
 func newKeytab(principal, password string) (string, error) {
@@ -390,9 +444,14 @@ func unixNewKeytab(principal, password string) (string, error) {
 	return "this is not a valid keytab, it is fake", nil
 }
 
+func getTime() time.Time {
+	// If running multiple instance the time must be the same so we statically use UTC
+	return time.Now().In(time.UTC)
+}
+
 // Shutdown shutdown
 func (t *Cache) Shutdown() {
+	zap.L().Info(fmt.Sprintf("Stopping"))
 	close(t.closeTimer)
-	close(t.closeKeymaker)
 	t.wg.Wait()
 }

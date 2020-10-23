@@ -1,8 +1,8 @@
-# Tokens2Keytabs
+# Tokens2Secrets
 
-Tokens2Keytabs grants Kerberos Keytabs to bearers of JWT Tokens authorized by
-Open Policy Agent (OPA) Rego. Tokens2Keytabs is a bridge between the Kerberos world and
-the Token world.
+Tokens2Secrets grants Secrets or Kerberos Keytabs to bearers of JWT Tokens authorized by
+Open Policy Agent (OPA) Rego. Tokens2Secrets is a bridge between the old world of shared
+secrets and Kerberos Keytabs and the new world of Tokens.
 
 Kerberos works by issuing tickets to users or machines that prove their identity with
 a username or principal and password. Daemonized applications, especially ones not part
@@ -30,13 +30,13 @@ bearer of said token will be issued a Keytab that will have a validity based on
 preconfigured time periods.
 
 Operatioally the process works like this. The bearer obtains a token from their identity
-provider (IDP) and makes a request to the Tokens2keytabs server for a nonce. The
-Tokens2keytabs server uses the bearers token to see if they are authorized to get a
+provider (IDP) and makes a request to the Tokens2Secrets server for a nonce. The
+Tokens2Secrets server uses the bearers token to see if they are authorized to get a
 nonce. If so a new nonce is created with an expiration time based on configuration and
 returned to the bearer. The bearer then obtains a new token from their identity provider
 with the audience (aud) field set to the nonce. This is to prevent a replay attack. The
 bearer uses this new token to request a Keytab with a desired principal from the
-Tokens2keytabs server. The Tokens2keytabs server validats the nonce and executes the OPA
+Tokens2Secrets server. The Tokens2Secrets server validats the nonce and executes the OPA
 policy to authorize that the bearer is entitled to the Keytab. If the bearer is entitiled
 the Keytab is returned as a JSON object with both the Keytab file as a Base64 encoded
 file and the Keytab expiration time.
@@ -54,6 +54,10 @@ expiration is based on the creation of the nonce (unlike the Keytab).
 In practice the bearer should request a Keytab, decoded the Base64 file to a scratch
 file, obtain a Kerberos ticket and then discard the Keytab by deleting the file.
 
+Tokens2Secrets may be ran on Windows, Linux or Darwin but valid Keytabs will only
+be issued if running on Windows. This is because the utility ktpass.exe is used
+to generate the Keytabs.
+
 ## Installation
 
 ### Windows
@@ -69,29 +73,37 @@ required for the creation of keytabs.
 The config will be covered below but on Windows a comma delineated list of configs is
 stored in the Windows registry. This can be set and shown using the same binary.
 
-Create a directory such as 'C:\Program Files\Tokens2keytabs' and install the binary
-'tokens2keytabs.exe' into said direcotry. Using the Windows command prompt change
+Create a directory such as 'C:\Program Files\Tokens2Secrets' and install the binary
+'tokens2Secrets.exe' into said direcotry. Using the Windows command prompt change
 directory to the installation directory and perform the following task.
 
 ```bash
 # Install the service
-.\tokens2keytabs.exe service install
+.\tokens2Secrets.exe service install
 
-# Create an example config if desired
-.\tokens2keytabs.exe config example > example.yaml
+# Create an example config then edit it
+.\tokens2Secrets.exe config example > example.yaml
 
 # Set the config(s) where $CONFIG_FILES with the location to one or more config files or
 #  http(s) urls
-.\tokens2keytabs.exe service config set $CONFIG_FILES
+.\tokens2Secrets.exe service config set $CONFIG_FILES
 
 # When ready start the service
-.\tokens2keytabs.exe service start
+.\tokens2Secrets.exe service start
 ```
 
 ### Linux and Darwin
 
-The server can be ran on Linux or Darwin but valid keytabs will not be created. Dummy
-Keytabs will be issued. This may be useful for testing.
+Download and install the binary tokens2Secrets. Note that valid Keytabs will NOT
+be issued on Linux and Darwin.
+
+```bash
+# Create an example config then edit it
+./tokens2Secrets config example > example.yaml
+
+# Run the server with
+./tokens2Secrets --config example.yaml
+```
 
 ## Configuration
 
@@ -198,11 +210,6 @@ policy:
 
   # This is the lifetime of a Keytab. The format is Golang time.Duration.
   keytabLifetime: 60
-
-  # This is the random seed that principal passwords are derived from. This must be kept
-  # secret. It is a good idea to keep this in a seperate config file with restrictive
-  # read & write permissions. Consider keeping it in a vault.
-  seed: this is not a good seed
 
 logging:
   # This should be debug, info, warn or error. Default is info.

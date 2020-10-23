@@ -15,7 +15,7 @@ limitations under the License.
 */
 package main
 
-import "github.com/jodydadescott/tokens2keytabs/internal/cmd"
+import "github.com/jodydadescott/tokens2secrets/internal/cmd"
 
 func main() {
 	cmd.Execute()

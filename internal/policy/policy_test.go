@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	"github.com/open-policy-agent/opa/rego"
 )
 
 var (
@@ -87,28 +89,38 @@ func Test1(t *testing.T) {
 	// Unmarshal or Decode the JSON to the interface.
 	json.Unmarshal([]byte(exampleInput), &claims)
 
-	config := &Config{
-		Policy: examplePolicy,
-	}
-
 	ctx := context.Background()
 
-	policyEngine, err := config.Build()
+	query, err := rego.New(
+		rego.Query("auth_get_nonce = data.main.auth_get_nonce; auth_get_keytab = data.main.auth_get_keytab; auth_get_secret = data.main.auth_get_secret"),
+		rego.Module("kerberos.rego", examplePolicy),
+	).PrepareForEval(ctx)
+
+	if err != nil {
+		t.Errorf("Unexpected error:%s", err)
+		return
+	}
+
+	policy := &Policy{
+		query: query,
+	}
 
 	if err != nil {
 		t.Errorf("Unexpected error:%s", err)
 	}
 
-	if !policyEngine.AuthGetNonce(ctx, claims) {
+	err = policy.AuthGetNonce(ctx, claims)
+	if err != nil {
 		t.Errorf("AuthGetNonce should be true")
 	}
 
-	// AuthGetKeytab(ctx context.Context, claims map[string]interface{}, nonce string, principals []string)
-	if !policyEngine.AuthGetKeytab(ctx, claims, "drpepper", "user1@example.com") {
-		t.Errorf("AuthGetNonce should be true")
+	err = policy.AuthGetKeytab(ctx, claims, "drpepper", "user1@example.com")
+	if err != nil {
+		t.Errorf("AuthGetKeytab should be true")
 	}
 
-	if !policyEngine.AuthGetSecret(ctx, claims, "drpepper", "secret1") {
+	err = policy.AuthGetSecret(ctx, claims, "drpepper", "secret1")
+	if err != nil {
 		t.Errorf("AuthGetSecret should be true")
 	}
 

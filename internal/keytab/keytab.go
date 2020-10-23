@@ -18,6 +18,7 @@ package keytab
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/jinzhu/copier"
 )
@@ -26,9 +27,11 @@ import (
 // encrypted password. Keytabs are used to prove identity specifically for
 // services and scripts.
 type Keytab struct {
-	Principal  string `json:"principal,omitempty" yaml:"principal,omitempty"`
-	Base64File string `json:"base64file,omitempty" yaml:"base64file,omitempty"`
-	Exp        int64  `json:"exp,omitempty" yaml:"exp,omitempty"`
+	Principal  string        `json:"principal,omitempty" yaml:"principal,omitempty"`
+	Seed       string        `json:"seed,omitempty" yaml:"seed,omitempty"`
+	Base64File string        `json:"base64file,omitempty" yaml:"base64file,omitempty"`
+	Exp        int64         `json:"exp,omitempty" yaml:"exp,omitempty"`
+	Lifetime   time.Duration `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
 }
 
 // JSON Return JSON String representation
@@ -37,8 +40,8 @@ func (t *Keytab) JSON() string {
 	return string(j)
 }
 
-// Clone return copy of entity
-func (t *Keytab) Clone() *Keytab {
+// Copy return copy of entity
+func (t *Keytab) Copy() *Keytab {
 	clone := &Keytab{}
 	copier.Copy(&clone, &t)
 	return clone

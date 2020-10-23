@@ -57,7 +57,7 @@ type Cache struct {
 // Build Returns a new Cache
 func (config *Config) Build() (*Cache, error) {
 
-	zap.L().Debug("Starting Nonce Cache")
+	zap.L().Debug("Starting")
 
 	cacheRefreshInterval := defaultCacheRefreshInterval
 	lifetime := defaultLifetime
@@ -85,7 +85,6 @@ func (config *Config) Build() (*Cache, error) {
 		for {
 			select {
 			case <-t.closed:
-				zap.L().Debug("PublicKeys Stopping")
 				t.wg.Done()
 				return
 			case <-t.ticker.C:
@@ -127,7 +126,7 @@ func (t *Cache) processCache() {
 }
 
 // NewNonce Returns a new nonce
-func (t *Cache) NewNonce() *Nonce {
+func (t *Cache) NewNonce() (*Nonce, error) {
 
 	b := make([]byte, 64)
 	for i := range b {
@@ -145,35 +144,36 @@ func (t *Cache) NewNonce() *Nonce {
 	t.internal[nonce.Value] = nonce
 
 	// Func is exported. Return clone to untrusted outsiders
-	return nonce.Clone()
+	return nonce.Copy(), nil
 }
 
 // GetNonce returns nonce if found and not expired
-func (t *Cache) GetNonce(key string) *Nonce {
+func (t *Cache) GetNonce(key string) (*Nonce, error) {
 
 	if key == "" {
 		zap.L().Warn("request for empty nonce")
-		return nil
+		return nil, ErrNotFound
 	}
 
 	nonce, exist := t.internal[key]
 	if exist {
 		if time.Now().Unix() > nonce.Exp {
 			zap.L().Debug(fmt.Sprintf("Nonce expired; nonce key:%s", key))
-			return nil
+			return nil, ErrExpired
 		}
 		// Func is exported. Return clone to untrusted outsiders
 		zap.L().Debug(fmt.Sprintf("Nonce found and not expired; nonce key:%s", key))
-		return nonce.Clone()
+		return nonce.Copy(), nil
 	}
 
 	zap.L().Debug(fmt.Sprintf("Nonce not found; nonce key:%s", key))
-	return nil
+	return nil, ErrNotFound
 
 }
 
 // Shutdown shutdowns the cache map
 func (t *Cache) Shutdown() {
+	zap.L().Debug("Stopping")
 	close(t.closed)
 	t.wg.Wait()
 }

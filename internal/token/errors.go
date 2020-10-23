@@ -21,12 +21,16 @@ import "errors"
 var (
 	// ErrInvalid Invalid format
 	ErrInvalid error = errors.New("Invalid format")
+
 	// ErrMissingField Token is missing a required field
 	ErrMissingField error = errors.New("Token is missing a required field")
+
 	// ErrSignatureInvalid Token signature is invalid
 	ErrSignatureInvalid error = errors.New(" Token signature is invalid")
+
 	// ErrExpired Token is expired
 	ErrExpired error = errors.New("Token is expired")
+
 	// ErrNonceInvalid Token Nonce is not valid
 	ErrNonceInvalid error = errors.New("Token Nonce is invalid")
 )

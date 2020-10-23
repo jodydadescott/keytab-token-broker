@@ -20,7 +20,11 @@ package cmd
 
 import (
 	"fmt"
+
+	"go.uber.org/zap/zapcore"
 )
+
+const configFile = "/etc/tokens2secrets.conf"
 
 func installService() error {
 	return fmt.Errorf("Not implemented")
@@ -52,4 +56,18 @@ func isAnInteractiveSession() (bool, error) {
 
 func runService() {
 
+}
+
+// GetRuntimeConfigString ...
+func GetRuntimeConfigString() (string, error) {
+	return configFile, nil
+}
+
+// SetRuntimeConfigString ...
+func SetRuntimeConfigString(runtimeConfigString string) error {
+	return fmt.Errorf("Not implemented")
+}
+
+func getZapHook() (func(zapcore.Entry) error, error) {
+	return nil, fmt.Errorf("Not implemented")
 }

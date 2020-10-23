@@ -24,7 +24,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Config ...
+// Config config
 type Config struct {
 	Policy string
 }
@@ -38,7 +38,7 @@ type Policy struct {
 func (config *Config) Build() (*Policy, error) {
 
 	if config.Policy == "" {
-		return nil, fmt.Errorf("Policy is empty")
+		return nil, fmt.Errorf("Policy is required")
 	}
 
 	ctx := context.Background()
@@ -58,7 +58,7 @@ func (config *Config) Build() (*Policy, error) {
 }
 
 // AuthGetNonce Auth that claims are allowed to get nonce
-func (t *Policy) AuthGetNonce(ctx context.Context, claims map[string]interface{}) bool {
+func (t *Policy) AuthGetNonce(ctx context.Context, claims map[string]interface{}) error {
 
 	input := &Input{
 		Claims: claims,
@@ -68,27 +68,27 @@ func (t *Policy) AuthGetNonce(ctx context.Context, claims map[string]interface{}
 
 	if err != nil {
 		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; err->%s", err))
-		return false
+		return ErrUnexpected
 	}
 
 	if len(results) == 0 {
 		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; results are empty"))
-		return false
+		return ErrEmptyResult
 	}
 
-	// data.kbridge.auth_get_keytab
-
 	if auth, ok := results[0].Bindings["auth_get_nonce"].(bool); ok {
-		zap.L().Error(fmt.Sprintf("Got result %t", auth))
-		return auth
+		if auth {
+			return nil
+		}
+		return ErrDenied
 	}
 
 	zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; unexpected result type"))
-	return false
+	return ErrInvalidType
 }
 
 // AuthGetKeytab Auth that claims, nonce and principals are allowed to get requested keytab
-func (t *Policy) AuthGetKeytab(ctx context.Context, claims map[string]interface{}, nonce, principal string) bool {
+func (t *Policy) AuthGetKeytab(ctx context.Context, claims map[string]interface{}, nonce, principal string) error {
 
 	input := &Input{
 		Claims:    claims,
@@ -100,25 +100,27 @@ func (t *Policy) AuthGetKeytab(ctx context.Context, claims map[string]interface{
 
 	if err != nil {
 		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; err->%s", err))
-		return false
+		return ErrUnexpected
 	}
 
 	if len(results) == 0 {
 		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; results are empty"))
-		return false
+		return ErrEmptyResult
 	}
 
 	if auth, ok := results[0].Bindings["auth_get_keytab"].(bool); ok {
-		zap.L().Error(fmt.Sprintf("Got result %t", auth))
-		return auth
+		if auth {
+			return nil
+		}
+		return ErrDenied
 	}
 
 	zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; unexpected result type"))
-	return false
+	return ErrInvalidType
 }
 
 // AuthGetSecret Auth request for secret
-func (t *Policy) AuthGetSecret(ctx context.Context, claims map[string]interface{}, nonce, name string) bool {
+func (t *Policy) AuthGetSecret(ctx context.Context, claims map[string]interface{}, nonce, name string) error {
 
 	input := &Input{
 		Claims: claims,
@@ -130,19 +132,21 @@ func (t *Policy) AuthGetSecret(ctx context.Context, claims map[string]interface{
 
 	if err != nil {
 		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; err->%s", err))
-		return false
+		return ErrUnexpected
 	}
 
 	if len(results) == 0 {
 		zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; results are empty"))
-		return false
+		return ErrEmptyResult
 	}
 
 	if auth, ok := results[0].Bindings["auth_get_secret"].(bool); ok {
-		zap.L().Error(fmt.Sprintf("Got result %t", auth))
-		return auth
+		if auth {
+			return nil
+		}
+		return ErrDenied
 	}
 
 	zap.L().Error(fmt.Sprintf("Unexpected error on Rego policy execution; unexpected result type"))
-	return false
+	return ErrInvalidType
 }

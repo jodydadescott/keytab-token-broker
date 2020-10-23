@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package httpserver
+package http
 
 import (
 	"context"
@@ -26,15 +26,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jodydadescott/tokens2keytabs/internal/tokens2secrets"
+	"github.com/jodydadescott/tokens2secrets/internal/keytab"
+	"github.com/jodydadescott/tokens2secrets/internal/nonce"
+	"github.com/jodydadescott/tokens2secrets/internal/secret"
 	"go.uber.org/zap"
 )
+
+// App Interface
+type App interface {
+	GetNonce(ctx context.Context, tokenString string) (*nonce.Nonce, error)
+	GetKeytab(ctx context.Context, tokenString, principal string) (*keytab.Keytab, error)
+	GetSecret(ctx context.Context, tokenString, name string) (*secret.Secret, error)
+}
 
 // Config ...
 type Config struct {
 	Listen, TLSCert, TLSKey string
 	HTTPPort, HTTPSPort     int
-	Tokens2Secrets          *tokens2secrets.Cache
 }
 
 // Server ...
@@ -42,11 +50,11 @@ type Server struct {
 	closed                  chan struct{}
 	wg                      sync.WaitGroup
 	httpServer, httpsServer *http.Server
-	tokens2Secrets          *tokens2secrets.Cache
+	app                     App
 }
 
 // Build Returns a new Server
-func (config *Config) Build() (*Server, error) {
+func (config *Config) Build(app App) (*Server, error) {
 
 	zap.L().Info(fmt.Sprintf("Starting"))
 
@@ -62,13 +70,13 @@ func (config *Config) Build() (*Server, error) {
 		return nil, fmt.Errorf("Must enable http or https")
 	}
 
-	if config.Tokens2Secrets == nil {
-		return nil, fmt.Errorf("Tokens2Secrets is nil")
+	if app == nil {
+		return nil, fmt.Errorf("app is nil")
 	}
 
 	server := &Server{
-		closed:         make(chan struct{}),
-		tokens2Secrets: config.Tokens2Secrets,
+		closed: make(chan struct{}),
+		app:    app,
 	}
 
 	if config.HTTPPort > 0 {
@@ -158,7 +166,7 @@ func (t *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.URL.Path {
 	case "/getnonce":
-		nonce, err := t.tokens2Secrets.GetNonce(r.Context(), token)
+		nonce, err := t.app.GetNonce(r.Context(), token)
 		if handleERR(w, err) {
 			return
 		}
@@ -173,7 +181,7 @@ func (t *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		keytab, err := t.tokens2Secrets.GetKeytab(r.Context(), token, principal)
+		keytab, err := t.app.GetKeytab(r.Context(), token, principal)
 		if handleERR(w, err) {
 			return
 		}
@@ -188,7 +196,7 @@ func (t *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		result, err := t.tokens2Secrets.GetSecret(r.Context(), token, name)
+		result, err := t.app.GetSecret(r.Context(), token, name)
 		if handleERR(w, err) {
 			return
 		}
@@ -233,6 +241,13 @@ func getKey(r *http.Request, name string) string {
 		return ""
 	}
 	return string(keys[0])
+}
+
+// Shutdown Server
+func (t *Server) Shutdown() {
+	zap.L().Info(fmt.Sprintf("Stopping"))
+	close(t.closed)
+	t.wg.Wait()
 }
 
 // StatusBadRequest                   = 400 // RFC 7231, 6.5.1

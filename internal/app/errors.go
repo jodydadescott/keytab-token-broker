@@ -14,29 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package nonce
+package app
 
-import (
-	"encoding/json"
+var (
+// // ErrDataValidationFail Data validation failure
+// ErrDataValidationFail error = errors.New("Data validation failure")
 
-	"github.com/jinzhu/copier"
+// // ErrAuthFail Authorization failure
+// ErrAuthFail error = errors.New("Authorization failure")
+
+// // ErrNotFound Entity not found
+// ErrNotFound error = errors.New("Entity not found")
 )
-
-// Nonce holds one time expiring secret
-type Nonce struct {
-	Exp   int64  `json:"exp,omitempty" yaml:"exp,omitempty"`
-	Value string `json:"value,omitempty" yaml:"value,omitempty"`
-}
-
-// JSON Return JSON String representation
-func (t *Nonce) JSON() string {
-	j, _ := json.Marshal(t)
-	return string(j)
-}
-
-// Copy return copy
-func (t *Nonce) Copy() *Nonce {
-	clone := &Nonce{}
-	copier.Copy(&clone, &t)
-	return clone
-}

@@ -31,7 +31,6 @@ type Policy struct {
 	Policy         string        `json:"policy,omitempty" yaml:"policy,omitempty"`
 	NonceLifetime  time.Duration `json:"nonceLifetime,omitempty" yaml:"nonceLifetime,omitempty"`
 	KeytabLifetime time.Duration `json:"keytabLifetime,omitempty" yaml:"keytabLifetime,omitempty"`
-	Seed           string        `json:"seed,omitempty" yaml:"seed,omitempty"`
 }
 
 // Logging Config
@@ -44,8 +43,8 @@ type Logging struct {
 
 // Data Config
 type Data struct {
-	KeytabPrincipals []string  `json:"principals,omitempty" yaml:"principals,omitempty"`
-	Secrets          []*Secret `json:"secrets,omitempty" yaml:"secrets,omitempty"`
+	Keytabs []*Keytab `json:"keytabs,omitempty" yaml:"keytabs,omitempty"`
+	Secrets []*Secret `json:"secrets,omitempty" yaml:"secrets,omitempty"`
 }
 
 // Secret Config
@@ -53,6 +52,13 @@ type Secret struct {
 	Name     string        `json:"name,omitempty" yaml:"name,omitempty"`
 	Seed     string        `json:"seed,omitempty" yaml:"seed,omitempty"`
 	Lifetime time.Duration `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
+}
+
+// Keytab Config
+type Keytab struct {
+	Principal string        `json:"principal,omitempty" yaml:"name,omitempty"`
+	Seed      string        `json:"seed,omitempty" yaml:"seed,omitempty"`
+	Lifetime  time.Duration `json:"lifetime,omitempty" yaml:"lifetime,omitempty"`
 }
 
 // NewConfig Returns new V1 Config
@@ -80,8 +86,8 @@ func (t *Config) YAML() string {
 	return string(j)
 }
 
-// Clone return copy of entity
-func (t *Config) Clone() *Config {
+// Copy return copy of entity
+func (t *Config) Copy() *Config {
 	clone := &Config{}
 	copier.Copy(&clone, &t)
 	return clone
@@ -90,7 +96,7 @@ func (t *Config) Clone() *Config {
 // Merge Config into existing config
 func (t *Config) Merge(config *Config) {
 
-	config = config.Clone()
+	config = config.Copy()
 
 	if config.Network != nil {
 
@@ -138,10 +144,6 @@ func (t *Config) Merge(config *Config) {
 			t.Policy.KeytabLifetime = config.Policy.KeytabLifetime
 		}
 
-		if config.Policy.Seed != "" {
-			t.Policy.Seed = config.Policy.Seed
-		}
-
 	}
 
 	if config.Logging != nil {
@@ -182,9 +184,9 @@ func (t *Config) Merge(config *Config) {
 			t.Data = &Data{}
 		}
 
-		if config.Data.KeytabPrincipals != nil {
-			for _, s := range config.Data.KeytabPrincipals {
-				t.Data.KeytabPrincipals = append(t.Data.KeytabPrincipals, s)
+		if config.Data.Keytabs != nil {
+			for _, s := range config.Data.Keytabs {
+				t.Data.Keytabs = append(t.Data.Keytabs, s)
 			}
 		}
 

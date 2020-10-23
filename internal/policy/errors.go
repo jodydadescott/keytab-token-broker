@@ -14,17 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tokens2secrets
+package policy
 
-import (
-	"errors"
-)
+import "errors"
 
 var (
-	// ErrDataValidationFail ...
-	ErrDataValidationFail error = errors.New("Data validation failure")
-	// ErrAuthFail ...
-	ErrAuthFail error = errors.New("Authorization failure")
-	// ErrNotFound ...
-	ErrNotFound error = errors.New("Entity not found")
+
+	// ErrDenied Denied
+	ErrDenied error = errors.New("Denied")
+
+	// ErrUnexpected Policy engine returned unexpected error
+	ErrUnexpected error = errors.New("Policy engine returned unexpected error")
+
+	// ErrEmptyResult Policy returned empty result"
+	ErrEmptyResult error = errors.New("Policy engine returned empty result")
+
+	// ErrInvalidType Policy returned invalid type
+	ErrInvalidType error = errors.New("Policy engine returned invalid type")
 )

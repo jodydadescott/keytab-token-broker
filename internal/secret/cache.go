@@ -24,16 +24,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jodydadescott/tokens2keytabs/internal/timeperiod"
+	"github.com/jodydadescott/tokens2secrets/internal/timeperiod"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"go.uber.org/zap"
 )
 
 const (
-	defaulMaxLifetime = time.Duration(8760) * time.Hour
-	defaulMinLifetime = time.Duration(60) * time.Second
-	defaulLifetime    = time.Duration(12) * time.Hour
+	defaulLifetime = time.Duration(12) * time.Hour
 
 	secretCharset = "abcdefghijklmnopqrstuvwxyz" +
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@!"
@@ -47,8 +45,7 @@ var ErrAuthDenied error = errors.New("Authorization Denied")
 
 // Config Config
 type Config struct {
-	MaxLifetime, MinLifetime time.Duration
-	Secrets                  []*Secret
+	Secrets []*Secret
 }
 
 type secretWrapper struct {
@@ -59,9 +56,8 @@ type secretWrapper struct {
 
 // Cache Manages shared secrets
 type Cache struct {
-	mutex                    sync.RWMutex
-	internal                 map[string]*secretWrapper
-	maxLifetime, minLifetime time.Duration
+	mutex    sync.RWMutex
+	internal map[string]*secretWrapper
 }
 
 // Build Returns a new Cache
@@ -69,25 +65,8 @@ func (config *Config) Build() (*Cache, error) {
 
 	zap.L().Debug("Starting")
 
-	maxLifetime := defaulMaxLifetime
-	minLifetime := defaulMinLifetime
-
-	if config.MaxLifetime > 0 {
-		maxLifetime = config.MaxLifetime
-	}
-
-	if config.MinLifetime > 0 {
-		minLifetime = config.MinLifetime
-	}
-
-	if minLifetime >= maxLifetime {
-		return nil, fmt.Errorf("MaxLifetime must be greater than MinLifetime")
-	}
-
 	t := &Cache{
-		internal:    make(map[string]*secretWrapper),
-		maxLifetime: maxLifetime,
-		minLifetime: minLifetime,
+		internal: make(map[string]*secretWrapper),
 	}
 
 	err := t.loadSecrets(config.Secrets)
@@ -138,14 +117,6 @@ func (t *Cache) addSecret(secret *Secret) error {
 		lifetime = secret.Lifetime
 	}
 
-	if secret.Lifetime > t.maxLifetime {
-		return fmt.Errorf("Lifetime greater than maxium")
-	}
-
-	if secret.Lifetime < t.minLifetime {
-		return fmt.Errorf("Lifetime less than minimum")
-	}
-
 	seed := base32.StdEncoding.EncodeToString([]byte(secret.Seed))
 
 	t.internal[secret.Name] = &secretWrapper{
@@ -158,11 +129,11 @@ func (t *Cache) addSecret(secret *Secret) error {
 }
 
 // GetSecret Returns secret if found and authorized
-func (t *Cache) GetSecret(name string) *Secret {
+func (t *Cache) GetSecret(name string) (*Secret, error) {
 
 	if name == "" {
 		zap.L().Debug("name is empty")
-		return nil
+		return nil, ErrNotFound
 	}
 
 	t.mutex.RLock()
@@ -175,7 +146,7 @@ func (t *Cache) GetSecret(name string) *Secret {
 
 	if !ok {
 		zap.L().Debug(fmt.Sprintf("Secret with name %s not found", name))
-		return nil
+		return nil, ErrNotFound
 	}
 
 	wrapper.mutex.Lock()
@@ -192,8 +163,7 @@ func (t *Cache) GetSecret(name string) *Secret {
 
 	nowsecret, err = wrapper.getSecretString(nowPeriod.Time())
 	if err != nil {
-		zap.L().Error(fmt.Sprintf("Secret with name %s got unexpected err %s", name, err))
-		return nil
+		return nil, err
 	}
 
 	result := &Secret{
@@ -215,7 +185,7 @@ func (t *Cache) GetSecret(name string) *Secret {
 		zap.L().Debug("HalfLife has not been reached")
 	}
 
-	return result
+	return result, nil
 }
 
 func (t *secretWrapper) getSecretString(now time.Time) (string, error) {
@@ -232,7 +202,8 @@ func (t *secretWrapper) getSecretString(now time.Time) (string, error) {
 	})
 
 	if err != nil {
-		return "", err
+		zap.L().Error(fmt.Sprintf("Unexpected error %s", err))
+		return "", ErrGenFail
 	}
 
 	hash := sha256.Sum256([]byte(otp + t.seed))
@@ -277,4 +248,5 @@ func getTime() time.Time {
 
 // Shutdown Server
 func (t *Cache) Shutdown() {
+	zap.L().Debug("Stopping")
 }

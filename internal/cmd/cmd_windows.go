@@ -24,17 +24,20 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jodydadescott/tokens2keytabs/internal/configloader"
+	"github.com/jodydadescott/tokens2secrets/internal/server"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/debug"
 	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-const svcName = "Tokens2Keytabs"
-const svcDesc = "JWT Token to Kerberos Keytab Server"
+const keyRegistryPath = `SOFTWARE\tokens2secrets`
+
+const svcName = "tokens2secrets"
+const svcDesc = "tokens to secrets"
 
 var elog debug.Log
 
@@ -210,20 +213,6 @@ func exePath() (string, error) {
 	return "", err
 }
 
-var exampleQuery string = "grant_new_nonce = data.kbridge.grant_new_nonce; data.kbridge.get_principals[get_principals]"
-
-var examplePolicy string = `
-package kbridge
-
-default grant_new_nonce = false
-grant_new_nonce {
-	input.iss == "https://api.console.aporeto.com/v/1/namespaces/5ddc396b9facec0001d3c886/oauthinfo"
-}
-get_principals[grant] {
-	grant := split(input.claims.service.keytab,",")
-}
-`
-
 type myservice struct{}
 
 func (m *myservice) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (ssec bool, errno uint32) {
@@ -236,9 +225,15 @@ func (m *myservice) Execute(args []string, r <-chan svc.ChangeRequest, changes c
 	slowtick := time.Tick(60 * time.Second)
 	tick := fasttick
 
-	configLoader := configloader.NewConfigLoader()
+	configLoader := server.NewLoader()
 
-	err = configLoader.LoadFromLocal()
+	config, err := GetRuntimeConfigString()
+	if err != nil {
+		elog.Error(9, err.Error())
+		return false, 2
+	}
+
+	err = configLoader.LoadFrom(config)
 
 	if err != nil {
 		elog.Error(10, err.Error())
@@ -349,4 +344,42 @@ func getZapHook() func(zapcore.Entry) error {
 
 		return nil
 	}
+}
+
+// GetRuntimeConfigString ...
+func GetRuntimeConfigString() (string, error) {
+
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, keyRegistryPath, registry.QUERY_VALUE)
+	if err != nil {
+		return "", err
+	}
+	defer k.Close()
+
+	runtimeConfigString, _, err := k.GetStringValue("RuntimeConfigString")
+	if err != nil {
+		if err != registry.ErrNotExist {
+			return "", nil
+		}
+		return "", err
+	}
+
+	return runtimeConfigString, nil
+}
+
+// SetRuntimeConfigString ...
+func SetRuntimeConfigString(runtimeConfigString string) error {
+
+	// _ arg is if key already existed
+	k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, keyRegistryPath, registry.WRITE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+
+	err = k.SetStringValue("RuntimeConfigString", runtimeConfigString)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -14,29 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package nonce
+package publickey
 
-import (
-	"encoding/json"
+import "errors"
 
-	"github.com/jinzhu/copier"
+var (
+	// ErrPublicKeyInvalid Public ISS Key not found or invalid
+	ErrPublicKeyInvalid error = errors.New("Public key (ISS) not found or invalid")
 )
-
-// Nonce holds one time expiring secret
-type Nonce struct {
-	Exp   int64  `json:"exp,omitempty" yaml:"exp,omitempty"`
-	Value string `json:"value,omitempty" yaml:"value,omitempty"`
-}
-
-// JSON Return JSON String representation
-func (t *Nonce) JSON() string {
-	j, _ := json.Marshal(t)
-	return string(j)
-}
-
-// Copy return copy
-func (t *Nonce) Copy() *Nonce {
-	clone := &Nonce{}
-	copier.Copy(&clone, &t)
-	return clone
-}

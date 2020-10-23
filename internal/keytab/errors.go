@@ -1,5 +1,3 @@
-// +build linux darwin
-
 /*
 Copyright © 2020 Jody Scott <jody@thescottsweb.com>
 
@@ -16,24 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package configloader
+package keytab
 
-import (
-	"fmt"
+import "errors"
 
-	"go.uber.org/zap/zapcore"
+var (
+	// ErrNotFound Secret not found
+	ErrNotFound error = errors.New("Keytab does not exist")
+
+	// ErrNotReady Keytab exist but has not been processed yet
+	ErrNotReady error = errors.New("Keytab exist but has not been processed")
+
+	// ErrGenFail Error occured while attempting to generate Keytab
+	ErrGenFail error = errors.New("Error occured while attempting to generate Keytab")
 )
-
-// GetRuntimeConfigString ...
-func GetRuntimeConfigString() (string, error) {
-	return "", fmt.Errorf("Not supported")
-}
-
-// SetRuntimeConfigString ...
-func SetRuntimeConfigString(runtimeConfigString string) error {
-	return fmt.Errorf("Not supported")
-}
-
-func getZapHook() (func(zapcore.Entry) error, error) {
-	return nil, fmt.Errorf("Not supported")
-}
