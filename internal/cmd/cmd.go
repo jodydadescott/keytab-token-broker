@@ -27,7 +27,6 @@ import (
 
 	"github.com/jodydadescott/tokens2secrets/config"
 	"github.com/jodydadescott/tokens2secrets/internal/server"
-	"github.com/jodydadescott/tokens2secrets/internal/token"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -334,24 +333,22 @@ var serverCmd = &cobra.Command{
 // Execute ...
 func Execute() {
 
-	token.Main()
+	if runtime.GOOS == "windows" {
+		isIntSess, err := isAnInteractiveSession()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, fmt.Sprintf("failed to determine if we are running in an interactive session: %v", err))
+			os.Exit(1)
+		}
+		if !isIntSess {
+			runService()
+			return
+		}
+	}
 
-	// if runtime.GOOS == "windows" {
-	// 	isIntSess, err := isAnInteractiveSession()
-	// 	if err != nil {
-	// 		fmt.Fprintln(os.Stderr, fmt.Sprintf("failed to determine if we are running in an interactive session: %v", err))
-	// 		os.Exit(1)
-	// 	}
-	// 	if !isIntSess {
-	// 		runService()
-	// 		return
-	// 	}
-	// }
-
-	// if err := rootCmd.Execute(); err != nil {
-	// 	fmt.Fprintln(os.Stderr, err)
-	// 	os.Exit(1)
-	// }
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
 // serviceCmd
