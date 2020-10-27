@@ -45,7 +45,7 @@ type Cache struct {
 	keytab    *keytab.Cache
 	nonce     *nonce.Cache
 	secret    *secret.Cache
-	publickey *publickey.Cache
+	publickey publickey.Cache
 	policy    *policy.Policy
 }
 

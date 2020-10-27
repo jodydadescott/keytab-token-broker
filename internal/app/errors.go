@@ -17,12 +17,21 @@ limitations under the License.
 package app
 
 var (
-// // ErrDataValidationFail Data validation failure
-// ErrDataValidationFail error = errors.New("Data validation failure")
+// // // ErrDataValidationFail Data validation failure
+// // ErrDataValidationFail error = errors.New("Data validation failure")
 
-// // ErrAuthFail Authorization failure
-// ErrAuthFail error = errors.New("Authorization failure")
+// // // ErrAuthFail Authorization failure
+// // ErrAuthFail error = errors.New("Authorization failure")
 
-// // ErrNotFound Entity not found
-// ErrNotFound error = errors.New("Entity not found")
+// // // ErrNotFound Entity not found
+// // ErrNotFound error = errors.New("Entity not found")
+
+// // ErrNotFound Not found
+// ErrNotFound error = errors.New("Entity does not exist")
+
+// // ErrNotReady Keytab exist but has not been processed yet
+// ErrNotReady error = errors.New("Entity existz ")
+
+// // ErrGenFail Error occured while attempting to generate Keytab
+// ErrGenFail error = errors.New("Error occured while attempting to generate Keytab")
 )

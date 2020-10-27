@@ -32,11 +32,6 @@ const (
 	defaultCacheRefresh = time.Duration(30) * time.Second
 )
 
-// PublicKeyCache Interface
-type PublicKeyCache interface {
-	GetKey(iss, kid string) (*publickey.PublicKey, error)
-}
-
 // Config config
 // IdleConnections is the idle connections for the HTTP client
 // CacheRefresh is the time interval between cache refresh
@@ -61,7 +56,7 @@ type Cache struct {
 	wg                  sync.WaitGroup
 	seededRand          *rand.Rand
 	permitPublicKeyHTTP bool
-	publicKeyCache      PublicKeyCache
+	publicKeyCache      publickey.Cache
 }
 
 func (t *Cache) mapGetToken(key string) *Token {
@@ -70,20 +65,14 @@ func (t *Cache) mapGetToken(key string) *Token {
 	return t.tokenMap[key]
 }
 
-func (t *Cache) mapPutToken(entity *Token) {
+func (t *Cache) mapPutToken(key string, entity *Token) {
 	t.tokenMapMutex.Lock()
 	defer t.tokenMapMutex.Unlock()
-	t.tokenMap[entity.TokenString] = entity
-}
-
-// Default returns default instance with default config
-func Default(publicKeyCache PublicKeyCache) (*Cache, error) {
-	c := &Config{}
-	return c.Build(publicKeyCache)
+	t.tokenMap[key] = entity
 }
 
 // Build Returns a new Token Cache
-func (config *Config) Build(publicKeyCache PublicKeyCache) (*Cache, error) {
+func (config *Config) Build(publicKeyCache publickey.Cache) (*Cache, error) {
 
 	zap.L().Debug("Starting")
 
@@ -135,10 +124,10 @@ func (t *Cache) ParseToken(tokenString string) (*Token, error) {
 	token := t.mapGetToken(tokenString)
 
 	if token != nil {
-		zap.L().Debug(fmt.Sprintf("Token %s found in cache", token.ShortName))
+		zap.L().Debug(fmt.Sprintf("Token %s found in cache", tokenString))
 
 		if token.Exp > time.Now().Unix() {
-			zap.L().Debug(fmt.Sprintf("Token %s is expired", token.ShortName))
+			zap.L().Debug(fmt.Sprintf("Token %s is expired", tokenString))
 			return nil, ErrExpired
 		}
 
@@ -148,45 +137,45 @@ func (t *Cache) ParseToken(tokenString string) (*Token, error) {
 	var err error
 	token, err = ParseToken(tokenString)
 	if err != nil {
-		zap.L().Debug(fmt.Sprintf("Unable to parse token %s", token.ShortName))
+		zap.L().Debug(fmt.Sprintf("Unable to parse token %s", tokenString))
 		return nil, err
 	}
 
-	zap.L().Debug(fmt.Sprintf("Token not found in cache; token=%s", token.ShortName))
+	zap.L().Debug(fmt.Sprintf("Token not found in cache; token=%s", tokenString))
 
 	if token.Alg == "" {
-		zap.L().Debug(fmt.Sprintf("Token %s is missing required field alg", token.ShortName))
+		zap.L().Debug(fmt.Sprintf("Token %s is missing required field alg", tokenString))
 		return nil, ErrMissingField
 	}
 
 	if token.Kid == "" {
-		zap.L().Debug(fmt.Sprintf("Token %s is missing required field kid", token.ShortName))
+		zap.L().Debug(fmt.Sprintf("Token %s is missing required field kid", tokenString))
 		return nil, ErrMissingField
 	}
 
 	if token.Typ == "" {
-		zap.L().Debug(fmt.Sprintf("Token %s is missing required field typ", token.ShortName))
+		zap.L().Debug(fmt.Sprintf("Token %s is missing required field typ", tokenString))
 		return nil, ErrMissingField
 	}
 
 	if token.Iss == "" {
-		zap.L().Debug(fmt.Sprintf("Token %s is missing required field iss", token.ShortName))
+		zap.L().Debug(fmt.Sprintf("Token %s is missing required field iss", tokenString))
 		return nil, ErrMissingField
 	}
 
 	if !strings.HasPrefix(token.Iss, "http") {
-		zap.L().Debug(fmt.Sprintf("Token %s has field iss but value %s is not expected", token.ShortName, token.Iss))
+		zap.L().Debug(fmt.Sprintf("Token %s has field iss but value %s is not expected", tokenString, token.Iss))
 		return nil, ErrMissingField
 	}
 
 	if !t.permitPublicKeyHTTP {
 		if !strings.HasPrefix(token.Iss, "https") {
-			zap.L().Debug(fmt.Sprintf("Token %s has field iss but value %s is not permitted as https is required", token.ShortName, token.Iss))
+			zap.L().Debug(fmt.Sprintf("Token %s has field iss but value %s is not permitted as https is required", tokenString, token.Iss))
 			return nil, ErrMissingField
 		}
 	}
 
-	_, err = jwt.Parse(token.TokenString, func(jwtToken *jwt.Token) (interface{}, error) {
+	_, err = jwt.Parse(tokenString, func(jwtToken *jwt.Token) (interface{}, error) {
 
 		// SigningMethodRSA
 
@@ -224,18 +213,18 @@ func (t *Cache) ParseToken(tokenString string) (*Token, error) {
 		} else if err.Error() == "Token used before issued" {
 			// Slight drift in clock. We will be the judge of that
 		} else {
-			zap.L().Debug(fmt.Sprintf("Unable to verify signature for token %s; error=%s", token.ShortName, err.Error()))
+			zap.L().Debug(fmt.Sprintf("Unable to verify signature for token %s; error=%s", tokenString, err.Error()))
 			return nil, ErrSignatureInvalid
 		}
 	}
 
-	if token.Exp > time.Now().Unix() {
-		zap.L().Debug(fmt.Sprintf("Token %s is expired", token.ShortName))
+	if time.Now().Unix() > token.Exp {
+		zap.L().Debug(fmt.Sprintf("Token %s is expired", tokenString))
 		return nil, ErrExpired
 	}
 
-	t.mapPutToken(token)
-	zap.L().Debug(fmt.Sprintf("Token %s added to cache", token.ShortName))
+	t.mapPutToken(tokenString, token)
+	zap.L().Debug(fmt.Sprintf("Token %s added to cache", tokenString))
 	return token.Copy(), nil
 }
 

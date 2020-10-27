@@ -27,15 +27,13 @@ import (
 
 // Token OAUTH/OIDC Token
 type Token struct {
-	TokenString string                 `json:"tokenString,omitempty" yaml:"tokenString,omitempty"`
-	ShortName   string                 `json:"shortName,omitempty" yaml:"shortName,omitempty"`
-	Alg         string                 `json:"alg,omitempty" yaml:"alg,omitempty"`
-	Kid         string                 `json:"kid,omitempty" yaml:"kid,omitempty"`
-	Typ         string                 `json:"typ,omitempty" yaml:"typ,omitempty"`
-	Iss         string                 `json:"iss,omitempty" yaml:"iss,omitempty"`
-	Exp         int64                  `json:"exp,omitempty" yaml:"exp,omitempty"`
-	Aud         string                 `json:"aud,omitempty" yaml:"aud,omitempty"`
-	Claims      map[string]interface{} `json:"claims,omitempty" yaml:"claims,omitempty"`
+	Alg    string                 `json:"alg,omitempty" yaml:"alg,omitempty"`
+	Kid    string                 `json:"kid,omitempty" yaml:"kid,omitempty"`
+	Typ    string                 `json:"typ,omitempty" yaml:"typ,omitempty"`
+	Iss    string                 `json:"iss,omitempty" yaml:"iss,omitempty"`
+	Exp    int64                  `json:"exp,omitempty" yaml:"exp,omitempty"`
+	Aud    string                 `json:"aud,omitempty" yaml:"aud,omitempty"`
+	Claims map[string]interface{} `json:"claims,omitempty" yaml:"claims,omitempty"`
 }
 
 // JSON Return JSON String representation
@@ -75,12 +73,12 @@ func ParseToken(tokenString string) (*Token, error) {
 		return nil, ErrInvalid
 	}
 
-	headerJSONString, err := base64.URLEncoding.DecodeString(tokenStringSlice[0])
+	headerJSONString, err := base64.RawURLEncoding.DecodeString(tokenStringSlice[0])
 	if err != nil {
 		return nil, err
 	}
 
-	payloadJSONString, err := base64.URLEncoding.DecodeString(tokenStringSlice[1])
+	payloadJSONString, err := base64.RawURLEncoding.DecodeString(tokenStringSlice[1])
 	if err != nil {
 		return nil, err
 	}
@@ -100,9 +98,7 @@ func ParseToken(tokenString string) (*Token, error) {
 	}
 
 	token := &Token{
-		TokenString: tokenString,
-		Claims:      payload,
-		ShortName:   tokenString[:12] + "...",
+		Claims: payload,
 	}
 
 	for k, v := range payload {

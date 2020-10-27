@@ -54,6 +54,14 @@
   version = "v1.0.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:6620a2846e620b336589751988e2b5907cc80a5ee1f3170eb2423304f996eaeb"
+  name = "github.com/go-errors/errors"
+  packages = ["."]
+  pruneopts = ""
+  revision = "7c023725d0115f2e05423b2b43a8f85c42f7a6af"
+
+[[projects]]
   digest = "1:9ab1b1c637d7c8f49e39d8538a650d7eb2137b076790cff69d160823b505964c"
   name = "github.com/gobwas/glob"
   packages = [
@@ -112,14 +120,6 @@
   pruneopts = ""
   revision = "e55ec40311b90df900426eae806bb80a40154583"
   version = "v1.8.3"
-
-[[projects]]
-  digest = "1:6dbb0eb72090871f2e58d1e37973fe3cb8c0f45f49459398d3fc740cb30e13bd"
-  name = "github.com/mitchellh/go-homedir"
-  packages = ["."]
-  pruneopts = ""
-  revision = "af06845cf3004701891bf4fdb884bfe4920b3727"
-  version = "v1.1.0"
 
 [[projects]]
   digest = "1:8871abddc1a4e30c0356055f65a3909a73b8847ca1e97e286a9ff7f5df8b92a2"
@@ -441,9 +441,10 @@
   analyzer-version = 1
   input-imports = [
     "github.com/dgrijalva/jwt-go",
+    "github.com/go-errors/errors",
     "github.com/jinzhu/copier",
-    "github.com/mitchellh/go-homedir",
     "github.com/open-policy-agent/opa/rego",
+    "github.com/pquerna/otp",
     "github.com/pquerna/otp/totp",
     "github.com/spf13/cobra",
     "github.com/spf13/viper",

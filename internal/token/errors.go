@@ -30,7 +30,4 @@ var (
 
 	// ErrExpired Token is expired
 	ErrExpired error = errors.New("Token is expired")
-
-	// ErrNonceInvalid Token Nonce is not valid
-	ErrNonceInvalid error = errors.New("Token Nonce is invalid")
 )

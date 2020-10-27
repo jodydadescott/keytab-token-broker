@@ -25,11 +25,11 @@ import (
 
 // PublicKey ...
 type PublicKey struct {
-	EcdsaPublicKey *ecdsa.PublicKey `json:"-"`
-	Iss            string           `json:"iss,omitempty" yaml:"iss,omitempty"`
-	Kid            string           `json:"kid,omitempty" yaml:"kid,omitempty"`
-	Kty            string           `json:"kty,omitempty" yaml:"kty,omitempty"`
-	Exp            int64            `json:"exp,omitempty" yaml:"exp,omitempty"`
+	EcdsaPublicKey *ecdsa.PublicKey
+	Iss            string
+	Kid            string
+	Kty            string
+	Exp            int64
 }
 
 // JSON Return JSON String representation
@@ -38,8 +38,8 @@ func (t *PublicKey) JSON() string {
 	return string(j)
 }
 
-// Clone return copy
-func (t *PublicKey) Clone() *PublicKey {
+// Copy return copy
+func (t *PublicKey) Copy() *PublicKey {
 	clone := &PublicKey{}
 	copier.Copy(&clone, &t)
 	return clone

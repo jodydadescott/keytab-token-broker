@@ -19,6 +19,6 @@ package publickey
 import "errors"
 
 var (
-	// ErrPublicKeyInvalid Public ISS Key not found or invalid
-	ErrPublicKeyInvalid error = errors.New("Public key (ISS) not found or invalid")
+	// ErrNotFound Public ISS Key not found or invalid
+	ErrNotFound error = errors.New("Public key (ISS) not found or invalid")
 )

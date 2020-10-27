@@ -25,3 +25,7 @@
   [[constraint]]
   name =  "github.com/pquerna/otp"
   branch = "master"
+
+  [[constraint]]
+  name =  "github.com/go-errors/errors"
+  branch = "master"
